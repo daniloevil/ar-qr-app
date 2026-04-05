@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://apis.google.com/js/api.js"></script>
 <style>
   :root {
     --bg: #0a0a0a;
@@ -511,12 +510,12 @@
 //  CONFIGURAZIONE — MODIFICA QUESTI VALORI
 // ─────────────────────────────────────────────
 const CONFIG = {
-  CLIENT_ID: '886595510849-33778cg8mtlufe3s8h5jr28scoir1r8s.apps.googleusercontent.com',
+  CLIENT_ID: 'INSERISCI_QUI_IL_TUO_CLIENT_ID.apps.googleusercontent.com',
   // Questo è l'ID del tuo progetto Google Cloud OAuth 2.0
   // Vedi: GUIDA_SETUP.md per come ottenerlo
 
   // URL base della tua GitHub Pages (senza / finale)
-  BASE_URL: 'https://daniloevil.github.io/ar-qr-app',
+  BASE_URL: 'https://TUO_USERNAME.github.io/ar-qr-app',
 };
 // ─────────────────────────────────────────────
 
@@ -525,29 +524,49 @@ let tokenClient;
 let accessToken = null;
 let models = [];
 let currentQrUrl = '';
+let gapiReady = false;
+let gisReady = false;
 
-// ── INIT ──
-window.onload = () => {
-  gapi.load('client', initGapiClient);
-  loadLocalModels();
-};
-
-function initGapiClient() {
-  gapi.client.init({
-    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-  }).then(() => {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CONFIG.CLIENT_ID,
-      scope: SCOPES,
-      callback: (resp) => {
-        if (resp.error) { showToast('Errore di accesso', 'error'); return; }
-        accessToken = resp.access_token;
-        gapi.client.setToken({ access_token: accessToken });
-        onSignedIn(resp);
-      },
+// ── INIT — chiamato da gapi script onload ──
+function gapiLoaded() {
+  gapi.load('client', async () => {
+    await gapi.client.init({
+      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
     });
+    gapiReady = true;
+    maybeEnableLogin();
   });
 }
+
+// ── INIT — chiamato da gsi script onload ──
+function gisLoaded() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.CLIENT_ID,
+    scope: SCOPES,
+    callback: (resp) => {
+      if (resp.error) { showToast('Errore di accesso: ' + resp.error, 'error'); return; }
+      accessToken = resp.access_token;
+      gapi.client.setToken({ access_token: accessToken });
+      onSignedIn();
+    },
+  });
+  gisReady = true;
+  maybeEnableLogin();
+}
+
+function maybeEnableLogin() {
+  if (gapiReady && gisReady) {
+    // Entrambe le librerie pronte: abilita il bottone
+    document.querySelectorAll('.btn-google').forEach(b => b.disabled = false);
+  }
+}
+
+// Carica i modelli salvati localmente all'avvio
+document.addEventListener('DOMContentLoaded', () => {
+  loadLocalModels();
+  // Disabilita i bottoni finché le librerie non sono pronte
+  document.querySelectorAll('.btn-google').forEach(b => b.disabled = true);
+});
 
 // ── AUTH ──
 function handleAuth() {
@@ -558,7 +577,7 @@ function handleAuth() {
   tokenClient.requestAccessToken({ prompt: '' });
 }
 
-function onSignedIn(resp) {
+function onSignedIn() {
   gapi.client.drive.about.get({ fields: 'user' }).then(res => {
     const user = res.result.user;
     const initials = user.displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
@@ -855,7 +874,8 @@ document.getElementById('qrModal').addEventListener('click', function(e) {
 });
 </script>
 
-<!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- Google APIs: DEVONO avere onload= per il callback corretto -->
+<script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" defer></script>
 </body>
 </html>
