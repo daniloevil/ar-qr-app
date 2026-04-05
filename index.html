@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR·QR — Realtà Aumentata con Google Drive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #111111; --surface2: #1a1a1a;
+    --border: rgba(255,255,255,0.08); --border-h: rgba(255,255,255,0.18);
+    --text: #f0ede8; --dim: rgba(240,237,232,0.45); --mid: rgba(240,237,232,0.7);
+    --accent: #c8f060; --accent-d: rgba(200,240,96,0.12); --red: #ff4d4d;
+    --mono: 'DM Mono', monospace; --sans: 'DM Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+  .app { max-width: 760px; margin: 0 auto; padding: 0 24px 80px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 36px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+  .logo { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+  .logo span { color: var(--accent); }
+  .logo-sub { font-size: 12px; color: var(--dim); font-family: var(--mono); margin-top: 2px; }
+
+  .add-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 32px; }
+  .add-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+  .add-sub { font-size: 13px; color: var(--dim); margin-bottom: 20px; }
+
+  .steps-inline { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; padding: 16px; background: var(--surface2); border-radius: 10px; border: 1px solid var(--border); }
+  .step-row { display: flex; gap: 10px; align-items: flex-start; }
+  .step-n { min-width: 22px; height: 22px; border-radius: 50%; background: var(--accent-d); border: 1px solid rgba(200,240,96,0.25); color: var(--accent); font-size: 11px; font-family: var(--mono); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .step-t { font-size: 13px; color: var(--mid); line-height: 1.5; }
+  .step-t b { color: var(--text); font-weight: 500; }
+  .step-t code { font-family: var(--mono); font-size: 11px; background: rgba(200,240,96,0.1); padding: 1px 6px; border-radius: 4px; color: var(--accent); }
+
+  .field-label { font-size: 12px; color: var(--dim); font-family: var(--mono); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 6px; }
+  .input-name, .input-url {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border-h);
+    border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: var(--sans);
+    color: var(--text); outline: none; transition: border-color 0.15s; margin-bottom: 14px;
+  }
+  .input-name:focus, .input-url:focus { border-color: var(--accent); }
+  .input-name::placeholder, .input-url::placeholder { color: var(--dim); }
+
+  .input-row { display: flex; gap: 10px; align-items: flex-start; }
+  .input-row .input-url { margin-bottom: 0; flex: 1; }
+  .btn-add { background: var(--accent); color: #0a0a0a; border: none; border-radius: 10px; padding: 11px 22px; font-size: 14px; font-weight: 500; font-family: var(--sans); cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+  .btn-add:hover { background: #d8f570; }
+
+  .error-msg { font-size: 12px; color: var(--red); margin-top: 8px; display: none; padding: 8px 12px; background: rgba(255,77,77,0.08); border-radius: 8px; border: 1px solid rgba(255,77,77,0.2); }
+
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; }
+  #modelsList { display: flex; flex-direction: column; gap: 10px; }
+
+  .model-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; transition: border-color 0.2s; animation: fi 0.25s ease; }
+  .model-card:hover { border-color: var(--border-h); }
+  @keyframes fi { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .model-thumb { width: 44px; height: 44px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .model-info { flex: 1; min-width: 0; }
+  .model-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+  .model-meta { font-size: 11px; color: var(--dim); font-family: var(--mono); }
+  .model-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .badge-ar { background: var(--accent-d); border: 1px solid rgba(200,240,96,0.2); color: var(--accent); font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; margin-left: 6px; vertical-align: middle; }
+  .btn-icon { width: 34px; height: 34px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.15s; color: var(--mid); }
+  .btn-icon:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-d); }
+  .btn-icon.del:hover { border-color: var(--red); color: var(--red); background: rgba(255,77,77,0.08); }
+
+  #emptyState { text-align: center; padding: 56px 24px; color: var(--dim); }
+  #emptyState .ei { font-size: 36px; margin-bottom: 12px; display: block; opacity: 0.3; }
+  #emptyState p { font-size: 13px; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); backdrop-filter: blur(6px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border: 1px solid var(--border-h); border-radius: 20px; padding: 28px; max-width: 400px; width: 100%; transform: translateY(10px); transition: transform 0.2s; position: relative; }
+  .modal-overlay.open .modal { transform: none; }
+  .modal-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 14px; transition: all 0.15s; }
+  .modal-close:hover { color: var(--text); border-color: var(--border-h); }
+  .modal-title { font-size: 16px; font-weight: 500; margin-bottom: 4px; padding-right: 36px; }
+  .modal-sub { font-size: 12px; color: var(--dim); margin-bottom: 20px; }
+  #qrContainer { background: white; border-radius: 12px; padding: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .modal-url { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 10px; color: var(--dim); word-break: break-all; margin-bottom: 14px; line-height: 1.6; }
+  .modal-actions { display: flex; gap: 8px; }
+  .btn-dl { flex: 1; background: var(--accent); color: #0a0a0a; border: none; border-radius: 9px; padding: 10px; font-size: 13px; font-weight: 500; font-family: var(--sans); cursor: pointer; transition: background 0.15s; }
+  .btn-dl:hover { background: #d8f570; }
+  .btn-copy { background: var(--surface2); color: var(--mid); border: 1px solid var(--border-h); border-radius: 9px; padding: 10px 14px; font-size: 13px; font-family: var(--sans); cursor: pointer; transition: all 0.15s; }
+  .btn-copy:hover { color: var(--text); border-color: var(--mid); }
+
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface); border: 1px solid var(--border-h); border-radius: 10px; padding: 11px 18px; font-size: 13px; color: var(--text); z-index: 200; transition: transform 0.25s; white-space: nowrap; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.ok { border-color: rgba(200,240,96,0.4); }
+  #toast.err { border-color: rgba(255,77,77,0.4); }
+
+  @media (max-width: 520px) { .input-row { flex-direction: column; } .input-row .input-url { margin-bottom: 0; } .btn-add { width: 100%; } }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <div class="logo">AR<span>·</span>QR</div>
+      <div class="logo-sub">Realtà Aumentata · Google Drive · Gratis</div>
+    </div>
+  </header>
+
+  <div class="add-card">
+    <div class="add-title">Aggiungi un modello 3D</div>
+    <div class="add-sub">Incolla il link di condivisione Google Drive — nessun login richiesto</div>
+
+    <div class="steps-inline">
+      <div class="step-row">
+        <div class="step-n">1</div>
+        <div class="step-t">Carica il file <code>.glb</code> o <code>.gltf</code> su <b>Google Drive</b></div>
+      </div>
+      <div class="step-row">
+        <div class="step-n">2</div>
+        <div class="step-t">Tasto destro sul file → <b>Condividi</b> → <b>"Chiunque abbia il link"</b> → <b>Copia link</b></div>
+      </div>
+      <div class="step-row">
+        <div class="step-n">3</div>
+        <div class="step-t">Incolla il link qui sotto e clicca <b>Aggiungi</b></div>
+      </div>
+    </div>
+
+    <div class="field-label">Nome modello</div>
+    <input class="input-name" id="modelName" type="text" placeholder="es. Sedia moderna, Logo aziendale…">
+
+    <div class="field-label">Link Google Drive</div>
+    <div class="input-row">
+      <input class="input-url" id="driveUrl" type="text" placeholder="https://drive.google.com/file/d/…/view?usp=sharing">
+      <button class="btn-add" onclick="addModel()">Aggiungi</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <div class="section-label">I tuoi modelli AR</div>
+  <div id="modelsList">
+    <div id="emptyState">
+      <span class="ei">📦</span>
+      <p>Nessun modello ancora.<br>Incolla il primo link Google Drive per iniziare.</p>
+    </div>
+  </div>
+</div>
+
+<!-- QR MODAL -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-sub">Scansiona con la fotocamera — nessuna app richiesta</div>
+    <div id="qrContainer"></div>
+    <div class="modal-url" id="modalUrl"></div>
+    <div class="modal-actions">
+      <button class="btn-dl" onclick="downloadQR()">⬇ Scarica QR</button>
+      <button class="btn-copy" onclick="copyUrl()">⎘ Copia link</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── UNICA COSA DA MODIFICARE ──────────────────
+// Il tuo URL GitHub Pages (senza / finale)
+const BASE_URL = 'https://daniloevil.github.io/ar-qr-app';
+// ─────────────────────────────────────────────
+
+let models = [];
+let currentQrUrl = '';
+
+document.addEventListener('DOMContentLoaded', () => { load(); render(); });
+
+// Enter su qualsiasi campo attiva aggiungi
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && ['driveUrl','modelName'].includes(document.activeElement.id)) addModel();
+});
+
+// Estrae l'ID file da qualsiasi variante di link Google Drive
+function extractDriveId(url) {
+  url = (url || '').trim();
+  let m;
+  m = url.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);   if (m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);        if (m) return m[1];
+  m = url.match(/\/open\?id=([a-zA-Z0-9_-]{10,})/);    if (m) return m[1];
+  // ID nudo (33 char alfanumerici)
+  m = url.match(/^([a-zA-Z0-9_-]{25,})$/);             if (m) return m[1];
+  return null;
+}
+
+function addModel() {
+  const rawUrl = document.getElementById('driveUrl').value;
+  const name   = document.getElementById('modelName').value.trim() || 'Modello 3D';
+  const errEl  = document.getElementById('errorMsg');
+  errEl.style.display = 'none';
+
+  if (!rawUrl.trim()) { showError('Incolla il link di Google Drive'); return; }
+
+  const fileId = extractDriveId(rawUrl);
+  if (!fileId) {
+    showError('Link non riconosciuto. Usa il link di condivisione Google Drive: tasto destro sul file → Condividi → Copia link.');
+    return;
+  }
+  if (models.find(m => m.id === fileId)) { showError('Questo modello è già in lista'); return; }
+
+  const model = {
+    id: fileId,
+    name,
+    addedAt: new Date().toISOString(),
+    viewUrl: `${BASE_URL}/view.html?id=${fileId}&name=${encodeURIComponent(name)}`,
+  };
+  models.unshift(model);
+  save(); render();
+  document.getElementById('driveUrl').value = '';
+  document.getElementById('modelName').value = '';
+  document.getElementById('errorMsg').style.display = 'none';
+  showToast('✓ Modello aggiunto!', 'ok');
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function render() {
+  const list = document.getElementById('modelsList');
+  if (models.length === 0) {
+    list.innerHTML = `
+      <div id="emptyState" style="text-align:center;padding:56px 24px;color:var(--dim);">
+        <span style="font-size:36px;display:block;margin-bottom:12px;opacity:0.3;">📦</span>
+        <p style="font-size:13px;">Nessun modello ancora.<br>Incolla il primo link Google Drive per iniziare.</p>
+      </div>`;
+    return;
+  }
+  list.innerHTML = '';
+  models.forEach((m, i) => {
+    const date = new Date(m.addedAt).toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' });
+    const c = document.createElement('div');
+    c.className = 'model-card';
+    // Usa data-index per evitare problemi di escaping negli onclick
+    c.innerHTML = `
+      <div class="model-thumb">📦</div>
+      <div class="model-info">
+        <div class="model-name">${esc(m.name)}<span class="badge-ar">WebAR</span></div>
+        <div class="model-meta">Aggiunto il ${date}</div>
+      </div>
+      <div class="model-actions">
+        <button class="btn-icon" title="QR Code" data-i="${i}" data-action="qr">🔲</button>
+        <button class="btn-icon" title="Apri in AR" data-i="${i}" data-action="ar">🥽</button>
+        <button class="btn-icon del" title="Rimuovi" data-i="${i}" data-action="del">✕</button>
+      </div>`;
+    list.appendChild(c);
+  });
+}
+
+// Gestione click delegata — evita problemi di escaping negli attributi onclick
+document.getElementById('modelsList').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const m = models[parseInt(btn.dataset.i)];
+  if (!m) return;
+  const action = btn.dataset.action;
+  if (action === 'qr')  showQR(m);
+  if (action === 'ar')  window.open(m.viewUrl, '_blank');
+  if (action === 'del') removeModel(m.id);
+});
+
+function showQR(m) {
+  currentQrUrl = m.viewUrl;
+  document.getElementById('modalTitle').textContent = m.name;
+  document.getElementById('modalUrl').textContent = m.viewUrl;
+  const container = document.getElementById('qrContainer');
+  container.innerHTML = '';
+  // Piccolo delay per assicurarsi che il container sia visibile nel DOM
+  setTimeout(() => {
+    new QRCode(container, {
+      text: m.viewUrl,
+      width: 220, height: 220,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }, 30);
+  document.getElementById('qrModal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('qrModal').classList.remove('open'); }
+document.getElementById('qrModal').addEventListener('click', e => { if (e.target.id === 'qrModal') closeModal(); });
+
+function downloadQR() {
+  const canvas = document.querySelector('#qrContainer canvas');
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.download = 'ar-qr.png'; a.href = canvas.toDataURL(); a.click();
+}
+function copyUrl() { navigator.clipboard.writeText(currentQrUrl).then(() => showToast('✓ Link copiato!', 'ok')); }
+
+function removeModel(id) {
+  if (!confirm('Rimuovere il modello dalla lista?')) return;
+  models = models.filter(m => m.id !== id); save(); render();
+}
+
+function save() { try { localStorage.setItem('arqr_v2', JSON.stringify(models)); } catch(e) {} }
+function load() { try { const d = localStorage.getItem('arqr_v2'); if (d) models = JSON.parse(d); } catch(e) { models = []; } }
+
+let toastT;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'show ' + (type||'');
+  clearTimeout(toastT); toastT = setTimeout(() => t.className = '', 2800);
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+</script>
+</body>
+</html>
