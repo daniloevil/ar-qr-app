@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR·QR</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0a;--s:#111;--s2:#1a1a1a;--b:rgba(255,255,255,0.08);--bh:rgba(255,255,255,0.18);--t:#f0ede8;--td:rgba(240,237,232,0.4);--tm:rgba(240,237,232,0.7);--a:#c8f060;--ad:rgba(200,240,96,0.12);--r:#ff4d4d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t);font-family:'DM Sans',sans-serif;font-size:15px;min-height:100vh}
+.wrap{max-width:740px;margin:0 auto;padding:0 20px 80px}
+header{padding:28px 0 32px;border-bottom:1px solid var(--b);margin-bottom:36px}
+.logo{font-family:'DM Mono',monospace;font-size:19px;font-weight:500}
+.logo em{color:var(--a);font-style:normal}
+.logo-s{font-size:11px;color:var(--td);font-family:'DM Mono',monospace;margin-top:3px}
+
+.card{background:var(--s);border:1px solid var(--b);border-radius:16px;padding:22px;margin-bottom:28px}
+.card-title{font-size:15px;font-weight:500;margin-bottom:4px}
+.card-sub{font-size:13px;color:var(--td);margin-bottom:18px}
+
+.howto{background:var(--s2);border:1px solid var(--b);border-radius:10px;padding:14px 16px;margin-bottom:18px;display:flex;flex-direction:column;gap:9px}
+.step{display:flex;gap:9px;align-items:flex-start}
+.sn{width:20px;height:20px;border-radius:50%;background:var(--ad);border:1px solid rgba(200,240,96,0.2);color:var(--a);font-size:10px;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.st{font-size:13px;color:var(--tm);line-height:1.5}
+.st b{color:var(--t);font-weight:500}
+.st code{font-family:'DM Mono',monospace;font-size:11px;background:rgba(200,240,96,0.1);padding:1px 5px;border-radius:4px;color:var(--a)}
+
+label{display:block;font-size:11px;color:var(--td);font-family:'DM Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+input[type=text]{width:100%;background:var(--s2);border:1px solid var(--bh);border-radius:10px;padding:11px 14px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--t);outline:none;transition:border-color .15s;margin-bottom:12px}
+input[type=text]:focus{border-color:var(--a)}
+input[type=text]::placeholder{color:var(--td)}
+.row{display:flex;gap:8px;align-items:stretch}
+.row input{margin-bottom:0;flex:1}
+button.add{background:var(--a);color:#0a0a0a;border:none;border-radius:10px;padding:0 20px;font-size:14px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;transition:background .15s}
+button.add:hover{background:#d8f570}
+.err{font-size:12px;color:var(--r);margin-top:8px;padding:8px 12px;background:rgba(255,77,77,.07);border:1px solid rgba(255,77,77,.2);border-radius:8px;display:none}
+
+.lbl{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--td);margin-bottom:12px}
+#list{display:flex;flex-direction:column;gap:10px}
+.mc{background:var(--s);border:1px solid var(--b);border-radius:13px;padding:14px 16px;display:flex;align-items:center;gap:12px;transition:border-color .2s;animation:fi .25s ease}
+.mc:hover{border-color:var(--bh)}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.mthumb{width:42px;height:42px;border-radius:9px;background:var(--s2);border:1px solid var(--b);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.minfo{flex:1;min-width:0}
+.mname{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.mmeta{font-size:11px;color:var(--td);font-family:'DM Mono',monospace}
+.badge{background:var(--ad);border:1px solid rgba(200,240,96,.2);color:var(--a);font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;padding:1px 6px;border-radius:99px;margin-left:5px;vertical-align:middle}
+.mact{display:flex;gap:5px;flex-shrink:0}
+.ic{width:32px;height:32px;border-radius:7px;background:var(--s2);border:1px solid var(--b);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s;color:var(--tm);font-family:inherit}
+.ic:hover{border-color:var(--a);color:var(--a);background:var(--ad)}
+.ic.d:hover{border-color:var(--r);color:var(--r);background:rgba(255,77,77,.07)}
+.empty{text-align:center;padding:50px 20px;color:var(--td)}
+.empty span{font-size:32px;display:block;margin-bottom:10px;opacity:.25}
+.empty p{font-size:13px}
+
+/* MODAL */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(8px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
+.ov.on{opacity:1;pointer-events:all}
+.mo{background:var(--s);border:1px solid var(--bh);border-radius:18px;padding:24px;max-width:380px;width:100%;position:relative;transform:translateY(8px);transition:transform .2s}
+.ov.on .mo{transform:none}
+.mclose{position:absolute;top:12px;right:12px;width:28px;height:28px;background:var(--s2);border:1px solid var(--b);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--td);font-size:13px;transition:all .15s;font-family:inherit}
+.mclose:hover{color:var(--t);border-color:var(--bh)}
+.mtitle{font-size:15px;font-weight:500;margin-bottom:3px;padding-right:32px}
+.msub{font-size:12px;color:var(--td);margin-bottom:18px}
+#qrwrap{background:#fff;border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;min-height:180px}
+#qrwrap canvas{display:block}
+.murl{background:var(--s2);border:1px solid var(--b);border-radius:7px;padding:8px 11px;font-family:'DM Mono',monospace;font-size:10px;color:var(--td);word-break:break-all;margin-bottom:12px;line-height:1.6}
+.mbtns{display:flex;gap:7px}
+.mdl{flex:1;background:var(--a);color:#0a0a0a;border:none;border-radius:8px;padding:9px;font-size:13px;font-weight:500;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background .15s}
+.mdl:hover{background:#d8f570}
+.mcp{background:var(--s2);color:var(--tm);border:1px solid var(--bh);border-radius:8px;padding:9px 13px;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:all .15s}
+.mcp:hover{color:var(--t);border-color:var(--tm)}
+
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(50px);background:var(--s);border:1px solid var(--bh);border-radius:9px;padding:10px 16px;font-size:13px;color:var(--t);z-index:200;transition:transform .25s;white-space:nowrap;pointer-events:none}
+#toast.on{transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:rgba(200,240,96,.45)}
+#toast.er{border-color:rgba(255,77,77,.45)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo">AR<em>·</em>QR</div>
+  <div class="logo-s">Realtà Aumentata · Google Drive · Gratis</div>
+</header>
+
+<div class="card">
+  <div class="card-title">Aggiungi un modello 3D</div>
+  <div class="card-sub">Nessun login — incolla il link di condivisione Google Drive</div>
+  <div class="howto">
+    <div class="step"><div class="sn">1</div><div class="st">Carica il file <code>.glb</code> su <b>Google Drive</b></div></div>
+    <div class="step"><div class="sn">2</div><div class="st">Tasto destro → <b>Condividi</b> → <b>"Chiunque abbia il link"</b> → <b>Copia link</b></div></div>
+    <div class="step"><div class="sn">3</div><div class="st">Incolla qui sotto e clicca <b>Aggiungi</b></div></div>
+  </div>
+  <label for="nm">Nome modello</label>
+  <input type="text" id="nm" placeholder="es. Sedia moderna">
+  <label for="du">Link Google Drive</label>
+  <div class="row">
+    <input type="text" id="du" placeholder="https://drive.google.com/file/d/…/view?usp=sharing">
+    <button class="add" onclick="addModel()">Aggiungi</button>
+  </div>
+  <div class="err" id="err"></div>
+</div>
+
+<div class="lbl">I tuoi modelli AR</div>
+<div id="list"></div>
+</div>
+
+<!-- MODAL -->
+<div class="ov" id="ov" onclick="if(event.target===this)closeModal()">
+  <div class="mo">
+    <button class="mclose" onclick="closeModal()">✕</button>
+    <div class="mtitle" id="mtitle"></div>
+    <div class="msub">Scansiona con la fotocamera — nessuna app</div>
+    <div id="qrwrap"></div>
+    <div class="murl" id="murl"></div>
+    <div class="mbtns">
+      <button class="mdl" onclick="dlQR()">⬇ Scarica QR</button>
+      <button class="mcp" onclick="cpUrl()">⎘ Copia link</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ── CONFIGURA QUESTO ──────────────────────────
+const BASE = 'https://daniloevil.github.io/ar-qr-app';
+// ─────────────────────────────────────────────
+
+let db = [], curUrl = '';
+
+// ── QR generator (no librerie esterne) ───────
+// Usa Google Charts API per generare il QR come immagine
+function makeQR(container, text) {
+  container.innerHTML = '';
+  const img = document.createElement('img');
+  img.width = 200;
+  img.height = 200;
+  img.style.display = 'block';
+  img.style.borderRadius = '4px';
+  // Google Charts QR — gratuito, no API key
+  img.src = 'https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl='
+    + encodeURIComponent(text) + '&choe=UTF-8';
+  img.alt = 'QR Code';
+  container.appendChild(img);
+}
+
+function dlQR() {
+  // Scarica il QR da Google Charts come PNG
+  const url = 'https://chart.googleapis.com/chart?cht=qr&chs=400x400&chl='
+    + encodeURIComponent(curUrl) + '&choe=UTF-8';
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ar-qr.png';
+  a.target = '_blank';
+  a.click();
+}
+// ─────────────────────────────────────────────
+
+function extractId(url) {
+  url = (url||'').trim();
+  let m;
+  m = url.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/); if(m) return m[1];
+  m = url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);     if(m) return m[1];
+  m = url.match(/^([a-zA-Z0-9_-]{25,})$/);           if(m) return m[1];
+  return null;
+}
+
+function addModel() {
+  const name = document.getElementById('nm').value.trim() || 'Modello 3D';
+  const raw  = document.getElementById('du').value.trim();
+  const errEl = document.getElementById('err');
+  errEl.style.display = 'none';
+  if (!raw) { showErr('Incolla il link di Google Drive'); return; }
+  const id = extractId(raw);
+  if (!id) { showErr('Link non valido. Usa il link di condivisione Drive: tasto destro → Condividi → Copia link.'); return; }
+  if (db.find(m => m.id === id)) { showErr('Modello già in lista'); return; }
+  db.unshift({ id, name, at: new Date().toISOString(),
+    url: BASE + '/view.html?id=' + id + '&name=' + encodeURIComponent(name) });
+  save(); render();
+  document.getElementById('nm').value = '';
+  document.getElementById('du').value = '';
+  toast('✓ Modello aggiunto!', 'ok');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && ['nm','du'].includes(document.activeElement.id)) addModel();
+});
+
+function render() {
+  const el = document.getElementById('list');
+  if (!db.length) {
+    el.innerHTML = '<div class="empty"><span>📦</span><p>Nessun modello ancora.<br>Incolla il primo link Google Drive.</p></div>';
+    return;
+  }
+  el.innerHTML = '';
+  db.forEach((m, i) => {
+    const d = new Date(m.at).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'});
+    const div = document.createElement('div');
+    div.className = 'mc';
+    div.innerHTML = `
+      <div class="mthumb">📦</div>
+      <div class="minfo">
+        <div class="mname">${esc(m.name)}<span class="badge">WebAR</span></div>
+        <div class="mmeta">Aggiunto il ${d}</div>
+      </div>
+      <div class="mact">
+        <button class="ic" data-i="${i}" data-a="qr" title="QR Code">🔲</button>
+        <button class="ic" data-i="${i}" data-a="ar" title="Apri in AR">🥽</button>
+        <button class="ic d" data-i="${i}" data-a="rm" title="Rimuovi">✕</button>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+document.getElementById('list').addEventListener('click', e => {
+  const btn = e.target.closest('[data-a]');
+  if (!btn) return;
+  const m = db[+btn.dataset.i];
+  if (!m) return;
+  if (btn.dataset.a === 'qr') openModal(m);
+  if (btn.dataset.a === 'ar') window.open(m.url, '_blank');
+  if (btn.dataset.a === 'rm') { if (confirm('Rimuovere?')) { db.splice(+btn.dataset.i,1); save(); render(); } }
+});
+
+function openModal(m) {
+  curUrl = m.url;
+  document.getElementById('mtitle').textContent = m.name;
+  document.getElementById('murl').textContent = m.url;
+  makeQR(document.getElementById('qrwrap'), m.url);
+  document.getElementById('ov').classList.add('on');
+}
+function closeModal() { document.getElementById('ov').classList.remove('on'); }
+function cpUrl() { navigator.clipboard.writeText(curUrl).then(() => toast('✓ Copiato!','ok')); }
+
+function save() { try { localStorage.setItem('arqr3', JSON.stringify(db)); } catch(e){} }
+function load() { try { const d=localStorage.getItem('arqr3'); if(d) db=JSON.parse(d); } catch(e){ db=[]; } }
+
+function showErr(msg) { const e=document.getElementById('err'); e.textContent=msg; e.style.display='block'; }
+
+let tt;
+function toast(msg, cls) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='on '+(cls||'');
+  clearTimeout(tt); tt=setTimeout(()=>t.className='',2800);
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+load(); render();
+</script>
+</body>
+</html>
