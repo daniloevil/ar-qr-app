@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR·QR — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #07090f;
+  --surf:   #0e1117;
+  --surf2:  #161b27;
+  --border: rgba(255,255,255,0.07);
+  --borderh:rgba(255,255,255,0.15);
+  --text:   #e8eaf0;
+  --muted:  rgba(232,234,240,0.4);
+  --mid:    rgba(232,234,240,0.68);
+  --accent: #5dfdcb;
+  --accentd:rgba(93,253,203,0.10);
+  --red:    #ff5c5c;
+  --mono:   'IBM Plex Mono', monospace;
+  --sans:   'Inter', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans);
+       font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 20px 100px; }
+
+/* ── HEADER ── */
+header { display: flex; align-items: center; justify-content: space-between;
+         padding: 32px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+.logo { font-family: var(--mono); font-size: 17px; font-weight: 500; letter-spacing: -.02em; }
+.logo em { color: var(--accent); font-style: normal; }
+.logo-tag { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 4px; }
+.pill { background: var(--accentd); border: 1px solid rgba(93,253,203,0.2);
+        color: var(--accent); font-family: var(--mono); font-size: 10px;
+        letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px;
+        border-radius: 99px; }
+
+/* ── ADD CARD ── */
+.card { background: var(--surf); border: 1px solid var(--border);
+        border-radius: 16px; padding: 24px; margin-bottom: 32px; }
+.card-h { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.card-s { font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+
+/* ── STEPS ── */
+.steps { background: var(--surf2); border: 1px solid var(--border); border-radius: 10px;
+         padding: 14px 16px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+.step  { display: flex; gap: 10px; align-items: flex-start; }
+.snum  { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(93,253,203,0.25);
+         background: var(--accentd); color: var(--accent); font-family: var(--mono);
+         font-size: 10px; display: flex; align-items: center; justify-content: center;
+         flex-shrink: 0; margin-top: 2px; }
+.stxt  { font-size: 12px; color: var(--mid); line-height: 1.55; }
+.stxt b { color: var(--text); font-weight: 500; }
+.stxt code { font-family: var(--mono); font-size: 11px; background: var(--accentd);
+             color: var(--accent); padding: 1px 6px; border-radius: 4px; }
+
+/* ── FORM ── */
+.flabel { font-family: var(--mono); font-size: 10px; color: var(--muted);
+          letter-spacing: .07em; text-transform: uppercase; margin-bottom: 6px; display: block; }
+input[type=text] { width: 100%; background: var(--surf2); border: 1px solid var(--borderh);
+  border-radius: 10px; padding: 11px 14px; font-size: 13px; font-family: var(--sans);
+  color: var(--text); outline: none; transition: border-color .15s; margin-bottom: 12px; }
+input[type=text]:focus { border-color: var(--accent); }
+input[type=text]::placeholder { color: var(--muted); }
+.frow  { display: flex; gap: 8px; }
+.frow input { margin-bottom: 0; flex: 1; }
+.btn-add { background: var(--accent); color: #07090f; border: none; border-radius: 10px;
+           padding: 0 20px; font-size: 13px; font-weight: 500; font-family: var(--sans);
+           cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+.btn-add:hover { opacity: .85; }
+.err { font-size: 12px; color: var(--red); margin-top: 8px; padding: 9px 12px;
+       background: rgba(255,92,92,.07); border: 1px solid rgba(255,92,92,.2);
+       border-radius: 8px; display: none; line-height: 1.5; }
+
+/* ── LIST ── */
+.list-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+              text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+#list { display: flex; flex-direction: column; gap: 10px; }
+.mc { background: var(--surf); border: 1px solid var(--border); border-radius: 13px;
+      padding: 14px 16px; display: flex; align-items: center; gap: 13px;
+      transition: border-color .2s; animation: fi .25s ease; }
+.mc:hover { border-color: var(--borderh); }
+@keyframes fi { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+.mico { width: 40px; height: 40px; border-radius: 8px; background: var(--surf2);
+        border: 1px solid var(--border); display: flex; align-items: center;
+        justify-content: center; font-size: 18px; flex-shrink: 0; }
+.minfo { flex: 1; min-width: 0; }
+.mname { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden;
+         text-overflow: ellipsis; margin-bottom: 3px; }
+.mmeta { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.badge { background: var(--accentd); border: 1px solid rgba(93,253,203,.2); color: var(--accent);
+         font-family: var(--mono); font-size: 9px; letter-spacing: .07em; text-transform: uppercase;
+         padding: 1px 6px; border-radius: 99px; margin-left: 5px; vertical-align: middle; }
+.mbtns { display: flex; gap: 5px; flex-shrink: 0; }
+.ib { width: 32px; height: 32px; border-radius: 7px; background: var(--surf2);
+      border: 1px solid var(--border); cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-size: 13px; transition: all .15s; color: var(--mid);
+      font-family: inherit; }
+.ib:hover { border-color: var(--accent); color: var(--accent); background: var(--accentd); }
+.ib.rm:hover { border-color: var(--red); color: var(--red); background: rgba(255,92,92,.07); }
+.empty { text-align: center; padding: 52px 20px; color: var(--muted); }
+.empty .ei { font-size: 34px; display: block; margin-bottom: 12px; opacity: .25; }
+.empty p { font-size: 12px; line-height: 1.7; }
+
+/* ── MODAL ── */
+.ov { position: fixed; inset: 0; background: rgba(0,0,0,.92);
+      backdrop-filter: blur(10px); z-index: 100; display: flex;
+      align-items: center; justify-content: center; padding: 16px;
+      opacity: 0; pointer-events: none; transition: opacity .2s; }
+.ov.on { opacity: 1; pointer-events: all; }
+.mo { background: var(--surf); border: 1px solid var(--borderh); border-radius: 18px;
+      padding: 26px; max-width: 360px; width: 100%; position: relative;
+      transform: translateY(8px); transition: transform .2s; }
+.ov.on .mo { transform: none; }
+.mclose { position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
+           background: var(--surf2); border: 1px solid var(--border); border-radius: 6px;
+           cursor: pointer; display: flex; align-items: center; justify-content: center;
+           color: var(--muted); font-size: 13px; transition: all .15s; font-family: inherit; }
+.mclose:hover { color: var(--text); border-color: var(--borderh); }
+.mtitle { font-size: 14px; font-weight: 500; margin-bottom: 3px; padding-right: 32px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msub { font-size: 11px; color: var(--muted); margin-bottom: 18px; }
+#qrwrap { background: #fff; border-radius: 10px; padding: 14px;
+           display: flex; align-items: center; justify-content: center;
+           margin-bottom: 12px; min-height: 180px; }
+#qrwrap img { display: block; width: 180px; height: 180px; border-radius: 3px; }
+.murl { background: var(--surf2); border: 1px solid var(--border); border-radius: 7px;
+         padding: 8px 11px; font-family: var(--mono); font-size: 10px; color: var(--muted);
+         word-break: break-all; margin-bottom: 12px; line-height: 1.65; }
+.mact { display: flex; gap: 7px; }
+.btn-dl { flex: 1; background: var(--accent); color: #07090f; border: none;
+           border-radius: 8px; padding: 9px; font-size: 12px; font-weight: 500;
+           font-family: var(--sans); cursor: pointer; transition: opacity .15s; }
+.btn-dl:hover { opacity: .85; }
+.btn-cp { background: var(--surf2); color: var(--mid); border: 1px solid var(--borderh);
+           border-radius: 8px; padding: 9px 13px; font-size: 12px; font-family: var(--sans);
+           cursor: pointer; transition: all .15s; }
+.btn-cp:hover { color: var(--text); border-color: var(--mid); }
+
+/* ── TOAST ── */
+#toast { position: fixed; bottom: 20px; left: 50%;
+         transform: translateX(-50%) translateY(50px);
+         background: var(--surf); border: 1px solid var(--borderh);
+         border-radius: 9px; padding: 10px 16px; font-size: 12px;
+         color: var(--text); z-index: 200; transition: transform .25s;
+         white-space: nowrap; pointer-events: none; }
+#toast.on { transform: translateX(-50%) translateY(0); }
+#toast.ok { border-color: rgba(93,253,203,.5); color: var(--accent); }
+#toast.er { border-color: rgba(255,92,92,.5); color: var(--red); }
+
+@media(max-width:480px){
+  .frow{flex-direction:column}
+  .btn-add{padding:11px}
+  .mbtns{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="logo">AR<em>·</em>QR</div>
+      <div class="logo-tag">WebAR · Google Drive · Open Source</div>
+    </div>
+    <div class="pill">✦ Gratis</div>
+  </header>
+
+  <!-- ADD CARD -->
+  <div class="card">
+    <div class="card-h">Aggiungi modello 3D</div>
+    <div class="card-s">
+      Carica il file <strong>.glb</strong> su Google Drive, condividilo pubblicamente e incolla il link qui sotto.
+      Nessun login richiesto.
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="snum">1</div>
+        <div class="stxt">
+          Carica il file <code>.glb</code> su <b>Google Drive</b>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum">2</div>
+        <div class="stxt">
+          Tasto destro sul file → <b>Condividi</b> → cambia da "Limitato" a
+          <b>"Chiunque abbia il link può visualizzare"</b> → clicca <b>Copia link</b>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum">3</div>
+        <div class="stxt">
+          Incolla il link qui sotto, dai un nome al modello e clicca <b>Aggiungi</b>
+        </div>
+      </div>
+    </div>
+
+    <label class="flabel" for="nm">Nome modello</label>
+    <input type="text" id="nm" placeholder="es. Sedia moderna, Logo 3D…" autocomplete="off">
+
+    <label class="flabel" for="du">Link Google Drive</label>
+    <div class="frow">
+      <input type="text" id="du"
+        placeholder="https://drive.google.com/file/d/…/view?usp=sharing"
+        autocomplete="off">
+      <button class="btn-add" id="addBtn" onclick="addModel()">Aggiungi</button>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- LIST -->
+  <div class="list-label">I tuoi modelli AR</div>
+  <div id="list"></div>
+
+</div>
+
+<!-- QR MODAL -->
+<div class="ov" id="ov" onclick="if(event.target===this)closeModal()">
+  <div class="mo">
+    <button class="mclose" onclick="closeModal()">✕</button>
+    <div class="mtitle" id="mtitle"></div>
+    <div class="msub">Scansiona con la fotocamera — nessuna app richiesta</div>
+    <div id="qrwrap"><img id="qrimg" src="" alt="QR Code"></div>
+    <div class="murl" id="murl"></div>
+    <div class="mact">
+      <button class="btn-dl" onclick="dlQR()">⬇ Scarica QR</button>
+      <button class="btn-cp" onclick="cpUrl()">⎘ Copia link</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ┌─────────────────────────────────────────────┐
+// │  CONFIGURAZIONE — modifica solo questa riga  │
+// └─────────────────────────────────────────────┘
+const BASE_URL = 'https://TUO_USERNAME.github.io/ar-qr';
+//   ↑ es: 'https://daniloevil.github.io/ar-qr'
+// ──────────────────────────────────────────────
+
+let db = [];
+let curUrl = '';
+
+// Estrae l'ID file da qualsiasi variante di link Google Drive
+function extractId(raw) {
+  raw = (raw || '').trim();
+  // Formato standard: /file/d/ID/view
+  let m = raw.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  // Formato ?id=ID
+  m = raw.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (m) return m[1];
+  // ID nudo (almeno 25 caratteri alfanumerici)
+  m = raw.match(/^([a-zA-Z0-9_-]{25,})$/);
+  if (m) return m[1];
+  return null;
+}
+
+// Costruisce l'URL QR usando Google Charts (gratuito, nessuna API key)
+function qrImgUrl(text, size) {
+  return 'https://chart.googleapis.com/chart?cht=qr&chs='
+    + (size||200) + 'x' + (size||200)
+    + '&chl=' + encodeURIComponent(text) + '&choe=UTF-8&chld=M|1';
+}
+
+function addModel() {
+  const name = (document.getElementById('nm').value.trim()) || 'Modello 3D';
+  const raw  = document.getElementById('du').value.trim();
+  hideErr();
+
+  if (!raw) { showErr('Incolla il link di condivisione Google Drive.'); return; }
+
+  const id = extractId(raw);
+  if (!id) {
+    showErr(
+      'Link non riconosciuto. Assicurati di usare il link di condivisione Google Drive:\n' +
+      'tasto destro sul file → Condividi → Copia link.\n' +
+      'Deve contenere /file/d/… oppure ?id=…'
+    );
+    return;
+  }
+
+  if (db.find(m => m.id === id)) {
+    showErr('Questo file è già in lista.'); return;
+  }
+
+  const viewUrl = BASE_URL + '/view.html?id=' + encodeURIComponent(id)
+                           + '&name=' + encodeURIComponent(name);
+
+  db.unshift({ id, name, viewUrl, at: new Date().toISOString() });
+  save(); render();
+
+  document.getElementById('nm').value = '';
+  document.getElementById('du').value = '';
+  toast('✓ Modello aggiunto!', 'ok');
+}
+
+// Enter su qualsiasi campo del form
+['nm','du'].forEach(function(id) {
+  document.getElementById(id).addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') addModel();
+  });
+});
+
+function render() {
+  const el = document.getElementById('list');
+  if (!db.length) {
+    el.innerHTML =
+      '<div class="empty">' +
+      '<span class="ei">📦</span>' +
+      '<p>Nessun modello ancora.<br>Incolla il primo link Google Drive per iniziare.</p>' +
+      '</div>';
+    return;
+  }
+  el.innerHTML = '';
+  db.forEach(function(m, i) {
+    var d = new Date(m.at).toLocaleDateString('it-IT',
+      { day: '2-digit', month: 'short', year: 'numeric' });
+    var div = document.createElement('div');
+    div.className = 'mc';
+    div.innerHTML =
+      '<div class="mico">📦</div>' +
+      '<div class="minfo">' +
+        '<div class="mname">' + esc(m.name) + '<span class="badge">WebAR</span></div>' +
+        '<div class="mmeta">Aggiunto il ' + d + '</div>' +
+      '</div>' +
+      '<div class="mbtns">' +
+        '<button class="ib" data-i="' + i + '" data-a="qr" title="Genera QR Code">🔲</button>' +
+        '<button class="ib" data-i="' + i + '" data-a="ar" title="Apri pagina AR">🥽</button>' +
+        '<button class="ib rm" data-i="' + i + '" data-a="rm" title="Rimuovi">✕</button>' +
+      '</div>';
+    el.appendChild(div);
+  });
+}
+
+// Event delegation — nessun onclick inline con URL dentro
+document.getElementById('list').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-a]');
+  if (!btn) return;
+  var idx = parseInt(btn.dataset.i, 10);
+  var m   = db[idx];
+  if (!m) return;
+  if (btn.dataset.a === 'qr') { openModal(m); }
+  if (btn.dataset.a === 'ar') { window.open(m.viewUrl, '_blank'); }
+  if (btn.dataset.a === 'rm') {
+    if (confirm('Rimuovere "' + m.name + '" dalla lista?')) {
+      db.splice(idx, 1); save(); render();
+    }
+  }
+});
+
+function openModal(m) {
+  curUrl = m.viewUrl;
+  document.getElementById('mtitle').textContent = m.name;
+  document.getElementById('murl').textContent   = m.viewUrl;
+  document.getElementById('qrimg').src          = qrImgUrl(m.viewUrl, 200);
+  document.getElementById('ov').classList.add('on');
+}
+
+function closeModal() {
+  document.getElementById('ov').classList.remove('on');
+}
+
+function dlQR() {
+  // Apre il QR ad alta risoluzione in una nuova tab per il salvataggio
+  var url = qrImgUrl(curUrl, 500);
+  var a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.click();
+}
+
+function cpUrl() {
+  navigator.clipboard.writeText(curUrl)
+    .then(function() { toast('✓ Link copiato!', 'ok'); })
+    .catch(function() { toast('Errore copia', 'er'); });
+}
+
+function showErr(msg) {
+  var el = document.getElementById('err');
+  el.style.whiteSpace = 'pre-line';
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideErr() {
+  document.getElementById('err').style.display = 'none';
+}
+
+var toastTimer;
+function toast(msg, cls) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'on ' + (cls || '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { t.className = ''; }, 2800);
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Persistenza locale
+function save() {
+  try { localStorage.setItem('arqr_v1', JSON.stringify(db)); } catch(e) {}
+}
+function load() {
+  try {
+    var raw = localStorage.getItem('arqr_v1');
+    if (raw) db = JSON.parse(raw);
+  } catch(e) { db = []; }
+}
+
+// Avvio
+load();
+render();
+</script>
+</body>
+</html>

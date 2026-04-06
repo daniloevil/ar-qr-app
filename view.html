@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR·QR — Visualizzatore</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!--
+  <model-viewer> di Google — gestisce automaticamente:
+  - Android: Scene Viewer (ARCore) tramite intent nativo
+  - iOS 12+: Quick Look AR tramite attributo ios-src o src con .usdz
+  - Desktop: anteprima 3D interattiva con rotazione/zoom
+  CDN ufficiale, sempre aggiornato.
+-->
+<script type="module"
+  src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js">
+</script>
+
+<style>
+:root {
+  --bg:     #07090f;
+  --surf:   #0e1117;
+  --surf2:  #161b27;
+  --border: rgba(255,255,255,0.07);
+  --borderh:rgba(255,255,255,0.15);
+  --text:   #e8eaf0;
+  --muted:  rgba(232,234,240,0.4);
+  --mid:    rgba(232,234,240,0.68);
+  --accent: #5dfdcb;
+  --accentd:rgba(93,253,203,0.10);
+  --red:    #ff5c5c;
+  --mono:   'IBM Plex Mono', monospace;
+  --sans:   'Inter', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans);
+       display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── TOP BAR ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+.logo { font-family: var(--mono); font-size: 14px; font-weight: 500; }
+.logo em { color: var(--accent); font-style: normal; }
+.model-label { font-size: 12px; color: var(--mid);
+               max-width: 180px; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+.back {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surf2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 11px;
+  font-size: 12px; color: var(--mid); text-decoration: none;
+  transition: all .15s;
+}
+.back:hover { color: var(--text); border-color: var(--borderh); }
+
+/* ── VIEWER AREA ── */
+.viewer-wrap { flex: 1; position: relative; overflow: hidden; }
+
+model-viewer {
+  width: 100%; height: 100%;
+  --poster-color: #07090f;
+  background: var(--bg);
+}
+
+/* Nasconde il pulsante AR built-in di model-viewer —
+   usiamo il nostro per avere controllo completo sul testo */
+model-viewer::part(default-ar-button) { display: none !important; }
+
+/* ── LOADING OVERLAY ── */
+#loading {
+  position: absolute; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  z-index: 5; transition: opacity .4s;
+}
+#loading.hidden { opacity: 0; pointer-events: none; }
+.load-txt { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .05em; }
+.load-bar { width: 100px; height: 2px; background: var(--surf2); border-radius: 99px; overflow: hidden; }
+.load-fill { height: 100%; background: var(--accent); border-radius: 99px;
+             animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse {
+  0%   { width: 0%;   margin-left: 0; }
+  50%  { width: 70%;  margin-left: 0; }
+  100% { width: 0%;   margin-left: 100%; }
+}
+
+/* ── ERROR STATE ── */
+#error-state {
+  position: absolute; inset: 0; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 32px; text-align: center;
+}
+#error-state .ei { font-size: 36px; opacity: .3; }
+#error-state .et { font-size: 13px; color: var(--mid); max-width: 280px; line-height: 1.6; }
+#error-state .es { font-size: 11px; color: var(--muted); font-family: var(--mono);
+                   max-width: 280px; line-height: 1.6; margin-top: 4px; }
+
+/* ── BOTTOM BAR ── */
+.bottombar {
+  flex-shrink: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.platform-row { display: flex; align-items: center; justify-content: space-between; }
+.platform-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surf2); border: 1px solid var(--border);
+  border-radius: 99px; padding: 4px 11px;
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+}
+.pdot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.hint { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+.btn-ar {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--accent); color: #07090f;
+  border: none; border-radius: 12px; padding: 14px;
+  font-size: 14px; font-weight: 500; font-family: var(--sans);
+  cursor: pointer; transition: opacity .15s; width: 100%;
+  letter-spacing: -.01em;
+}
+.btn-ar:hover { opacity: .85; }
+.btn-ar:disabled { opacity: .35; cursor: default; }
+
+/* ── TOAST ── */
+#toast { position: fixed; bottom: 90px; left: 50%;
+         transform: translateX(-50%) translateY(40px);
+         background: var(--surf); border: 1px solid var(--borderh);
+         border-radius: 9px; padding: 9px 16px; font-size: 12px;
+         color: var(--text); z-index: 200; transition: transform .25s;
+         white-space: nowrap; pointer-events: none; opacity: 0; }
+#toast.on { transform: translateX(-50%) translateY(0); opacity: 1; }
+#toast.ok { border-color: rgba(93,253,203,.5); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">AR<em>·</em>QR</div>
+  <div class="model-label" id="modelLabel">Caricamento…</div>
+  <a href="index.html" class="back">← Dashboard</a>
+</div>
+
+<!-- VIEWER -->
+<div class="viewer-wrap">
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="load-txt">caricamento modello…</div>
+    <div class="load-bar"><div class="load-fill"></div></div>
+  </div>
+
+  <!-- Error -->
+  <div id="error-state">
+    <div class="ei">⚠</div>
+    <div class="et" id="error-txt">Impossibile caricare il modello.</div>
+    <div class="es" id="error-sub"></div>
+  </div>
+
+  <!--
+    model-viewer attributes spiegati:
+    - ar                  → abilita la modalità AR
+    - ar-modes            → ordine di priorità: WebXR → Scene Viewer (Android) → Quick Look (iOS)
+    - ar-scale="auto"     → adatta la scala al mondo reale automaticamente
+    - camera-controls     → abilita rotazione/zoom/pan con gesture
+    - auto-rotate         → rotazione automatica dell'oggetto (si ferma al tocco)
+    - shadow-intensity    → ombra a terra per AR più realistica
+    - environment-image   → illuminazione ambiente (neutral = bilanciato)
+  -->
+  <model-viewer
+    id="mv"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-scale="auto"
+    camera-controls
+    auto-rotate
+    auto-rotate-delay="800"
+    rotation-per-second="18deg"
+    shadow-intensity="1.2"
+    shadow-softness="0.8"
+    environment-image="neutral"
+    exposure="1"
+    style="width:100%;height:100%"
+  ></model-viewer>
+
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottombar">
+  <div class="platform-row">
+    <div class="platform-pill">
+      <div class="pdot"></div>
+      <span id="platformTxt">Rilevamento…</span>
+    </div>
+    <div class="hint" id="hintTxt">Ruota · Zoom · Tap AR</div>
+  </div>
+  <button class="btn-ar" id="arBtn" onclick="launchAR()" disabled>
+    🥽 Visualizza in Realtà Aumentata
+  </button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── LETTURA PARAMETRI URL ──────────────────────
+var params  = new URLSearchParams(window.location.search);
+var fileId  = params.get('id')   || '';
+var rawName = params.get('name') || 'Modello 3D';
+var name    = decodeURIComponent(rawName);
+
+document.title = 'AR·QR — ' + name;
+document.getElementById('modelLabel').textContent = name;
+
+// ── COSTRUZIONE DIRECT LINK ───────────────────
+/*
+  Google Drive ha due endpoint per i file:
+  1. uc?export=download&id=ID  → scarica il file, ha problemi CORS
+  2. uc?export=view&id=ID      → apre anteprima, ancora problemi CORS
+
+  La soluzione che funziona con <model-viewer>:
+  - Android: Scene Viewer scarica il file tramite intent nativo (bypass CORS)
+  - iOS: Quick Look scarica il file tramite URLSession nativa (bypass CORS)
+  - Desktop: serve un proxy CORS oppure hosting separato del file
+
+  Per ora usiamo il link diretto. Su mobile funziona sempre tramite
+  i viewer nativi. Sul desktop mostriamo un avviso.
+*/
+var directUrl = 'https://drive.google.com/uc?export=download&id=' + fileId;
+
+/*
+  Alternativa con proxy CORS (per desktop):
+  Decommenta questa riga e commenta quella sopra se vuoi
+  che funzioni anche su desktop:
+
+  var directUrl = 'https://corsproxy.io/?' + encodeURIComponent(
+    'https://drive.google.com/uc?export=download&id=' + fileId
+  );
+
+  NOTA: corsproxy.io è un servizio gratuito di terze parti.
+  Per produzione, considera di hostare il file su un bucket
+  pubblico (es. Google Cloud Storage, Cloudflare R2) che
+  ha CORS configurato correttamente.
+*/
+
+// ── PLATFORM DETECTION ────────────────────────
+var ua        = navigator.userAgent;
+var isIOS     = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+var isAndroid = /Android/.test(ua);
+var isMobile  = isIOS || isAndroid;
+
+var platformEl  = document.getElementById('platformTxt');
+var hintEl      = document.getElementById('hintTxt');
+var arBtn       = document.getElementById('arBtn');
+
+if (isIOS) {
+  platformEl.textContent = 'iOS — Apple Quick Look';
+  hintEl.textContent     = 'AR nativa · nessuna app richiesta';
+} else if (isAndroid) {
+  platformEl.textContent = 'Android — Google Scene Viewer';
+  hintEl.textContent     = 'ARCore · nessuna app richiesta';
+} else {
+  platformEl.textContent = 'Desktop — Anteprima 3D';
+  hintEl.textContent     = 'Apri da mobile per la realtà aumentata';
+  arBtn.textContent      = '🖱 Visualizza in 3D (desktop)';
+}
+
+// ── CARICAMENTO MODELLO ───────────────────────
+var mv = document.getElementById('mv');
+
+if (!fileId) {
+  showError(
+    'Nessun file specificato.',
+    'Torna alla dashboard e genera un link QR valido.'
+  );
+} else {
+  mv.setAttribute('src', directUrl);
+  mv.setAttribute('alt', name);
+
+  // iOS Quick Look: se disponibile un .usdz convertito, usalo con ios-src.
+  // In mancanza, model-viewer usa il .glb anche su iOS (funziona con Quick Look 3D).
+  // mv.setAttribute('ios-src', URL_DEL_FILE_USDZ);  // ← opzionale
+}
+
+// ── EVENTI MODEL-VIEWER ───────────────────────
+mv.addEventListener('load', function() {
+  document.getElementById('loading').classList.add('hidden');
+  arBtn.disabled = false;
+});
+
+mv.addEventListener('error', function(e) {
+  console.error('model-viewer error:', e);
+  if (isMobile) {
+    // Su mobile l'errore CORS è comune ma l'AR nativa può comunque funzionare
+    // tramite intent di Scene Viewer / Quick Look — proviamo comunque
+    document.getElementById('loading').classList.add('hidden');
+    arBtn.disabled = false;
+    showToast('Anteprima 3D non disponibile — prova AR dal pulsante', 'ok');
+  } else {
+    showError(
+      'Impossibile caricare il modello 3D.',
+      'Google Drive blocca le richieste cross-origin dal browser desktop. ' +
+      'Scansiona il QR Code con il telefono per visualizzare in AR, ' +
+      'oppure sposta il file .glb su un hosting con CORS abilitato (es. GitHub Pages).'
+    );
+  }
+});
+
+mv.addEventListener('ar-status', function(e) {
+  if (e.detail.status === 'failed') {
+    showToast('AR non supportata su questo dispositivo', '');
+  }
+});
+
+// ── PULSANTE AR ───────────────────────────────
+function launchAR() {
+  if (!isMobile) {
+    alert(
+      'La Realtà Aumentata richiede un dispositivo mobile.\n\n' +
+      'Scansiona il QR Code con il tuo iPhone o smartphone Android ' +
+      'per vedere il modello nel tuo ambiente reale.'
+    );
+    return;
+  }
+  // Attiva la modalità AR di model-viewer
+  // Su Android → lancia Scene Viewer tramite intent
+  // Su iOS → attiva Quick Look AR
+  mv.activateAR();
+}
+
+// ── HELPERS ───────────────────────────────────
+function showError(title, sub) {
+  document.getElementById('loading').classList.add('hidden');
+  var es = document.getElementById('error-state');
+  es.style.display = 'flex';
+  document.getElementById('error-txt').textContent = title;
+  document.getElementById('error-sub').textContent = sub || '';
+  arBtn.disabled = true;
+}
+
+var toastT;
+function showToast(msg, cls) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'on ' + (cls || '');
+  clearTimeout(toastT);
+  toastT = setTimeout(function() { t.className = ''; }, 3000);
+}
+</script>
+</body>
+</html>
