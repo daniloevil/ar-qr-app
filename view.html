@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AR·QR — Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=Figtree:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- model-viewer di Google: gestisce iOS QuickLook e Android Scene Viewer automaticamente -->
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+
+<style>
+:root {
+  --bg:     #0f0d0b;
+  --surf:   #1a1714;
+  --surf2:  #252018;
+  --border: rgba(255,255,255,0.07);
+  --borderh:rgba(255,255,255,0.14);
+  --text:   #f0ede8;
+  --mid:    rgba(240,237,232,0.65);
+  --muted:  rgba(240,237,232,0.38);
+  --accent: #e8521a;
+  --accentd:rgba(232,82,26,0.12);
+  --green:  #4ade80;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Figtree', sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP BAR ── */
+.bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg);
+  z-index: 20;
+}
+.logo { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; letter-spacing: -0.03em; }
+.logo em { color: var(--accent); font-style: normal; }
+.model-name {
+  font-size: 12px; color: var(--mid);
+  max-width: 160px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.btn-back {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--surf2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 12px;
+  font-size: 12px; color: var(--mid); text-decoration: none;
+  font-family: 'Figtree', sans-serif;
+  transition: all 0.15s;
+}
+.btn-back:hover { color: var(--text); border-color: var(--borderh); }
+
+/* ── VIEWER ── */
+.viewer-wrap { flex: 1; position: relative; overflow: hidden; }
+
+model-viewer {
+  width: 100%; height: 100%;
+  --poster-color: #0f0d0b;
+  background: var(--bg);
+}
+/* Nasconde il pulsante AR built-in: usiamo il nostro */
+model-viewer::part(default-ar-button) { display: none !important; }
+
+/* ── LOADING ── */
+#loading {
+  position: absolute; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+  z-index: 10; transition: opacity 0.5s;
+}
+#loading.done { opacity: 0; pointer-events: none; }
+.ld-name {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px; font-weight: 600;
+  letter-spacing: -0.02em;
+  max-width: 260px; text-align: center; color: var(--mid);
+}
+.ld-bar { width: 120px; height: 2px; background: var(--surf2); border-radius: 99px; overflow: hidden; }
+.ld-fill {
+  height: 100%; background: var(--accent);
+  border-radius: 99px;
+  animation: scan 1.8s ease-in-out infinite;
+}
+@keyframes scan {
+  0%   { width: 0%;  transform: translateX(0); }
+  50%  { width: 60%; transform: translateX(0); }
+  100% { width: 0%;  transform: translateX(200px); }
+}
+
+/* ── ERROR STATE ── */
+#err-state {
+  position: absolute; inset: 0;
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; padding: 32px; text-align: center;
+}
+.err-icon { font-size: 40px; opacity: 0.25; }
+.err-title { font-size: 14px; color: var(--mid); max-width: 280px; line-height: 1.6; }
+.err-hint {
+  font-size: 12px; color: var(--muted);
+  max-width: 280px; line-height: 1.7;
+  background: var(--surf2); border-radius: 10px;
+  padding: 10px 14px; margin-top: 4px;
+}
+
+/* ── BOTTOM ── */
+.bottom {
+  flex-shrink: 0; background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 12px 18px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.plat-row { display: flex; align-items: center; justify-content: space-between; }
+.plat-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surf2); border: 1px solid var(--border);
+  border-radius: 99px; padding: 5px 12px;
+  font-size: 11px; color: var(--muted);
+  font-family: 'Figtree', sans-serif;
+}
+.pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.hint-txt { font-size: 11px; color: var(--muted); }
+
+.btn-ar {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 14px;
+  padding: 15px; font-size: 15px; font-weight: 500;
+  font-family: 'Figtree', sans-serif;
+  cursor: pointer; transition: all 0.15s;
+  letter-spacing: -0.01em;
+}
+.btn-ar:hover  { background: #d44515; }
+.btn-ar:active { transform: scale(0.98); }
+.btn-ar:disabled { opacity: 0.3; cursor: default; transform: none; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="logo">AR<em>·</em>QR</div>
+  <div class="model-name" id="modelName">Caricamento…</div>
+  <a href="index.html" class="btn-back">← Dashboard</a>
+</div>
+
+<div class="viewer-wrap">
+
+  <div id="loading">
+    <div class="ld-name" id="ldName">…</div>
+    <div class="ld-bar"><div class="ld-fill"></div></div>
+  </div>
+
+  <div id="err-state">
+    <div class="err-icon">⚠</div>
+    <div class="err-title" id="errTitle">Impossibile caricare il modello.</div>
+    <div class="err-hint" id="errHint"></div>
+  </div>
+
+  <model-viewer
+    id="mv"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-scale="auto"
+    camera-controls
+    touch-action="pan-y"
+    auto-rotate
+    auto-rotate-delay="1000"
+    rotation-per-second="15deg"
+    shadow-intensity="1.5"
+    shadow-softness="0.9"
+    environment-image="neutral"
+    exposure="1.1"
+    style="width:100%;height:100%"
+  ></model-viewer>
+
+</div>
+
+<div class="bottom">
+  <div class="plat-row">
+    <div class="plat-pill">
+      <div class="pdot"></div>
+      <span id="platLabel">Rilevamento…</span>
+    </div>
+    <div class="hint-txt" id="hintLabel">Ruota · Zoom</div>
+  </div>
+  <button class="btn-ar" id="arBtn" onclick="launchAR()" disabled>
+    🥽 Visualizza in Realtà Aumentata
+  </button>
+</div>
+
+<script>
+var params = new URLSearchParams(window.location.search);
+// ?src=  → percorso relativo del file .glb nella repo
+// ?name= → nome da mostrare
+var src    = params.get('src')  || '';
+var name   = decodeURIComponent(params.get('name') || 'Modello 3D');
+
+document.title = 'AR·QR — ' + name;
+document.getElementById('modelName').textContent = name;
+document.getElementById('ldName').textContent = name;
+
+var ua        = navigator.userAgent;
+var isIOS     = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+var isAndroid = /Android/.test(ua);
+var isMobile  = isIOS || isAndroid;
+
+// Platform
+var platEl = document.getElementById('platLabel');
+var hintEl = document.getElementById('hintLabel');
+var arBtn  = document.getElementById('arBtn');
+
+if (isIOS) {
+  platEl.textContent = 'iOS — Apple Quick Look';
+  hintEl.textContent = 'AR nativa · nessuna app';
+} else if (isAndroid) {
+  platEl.textContent = 'Android — Scene Viewer';
+  hintEl.textContent = 'ARCore · nessuna app';
+} else {
+  platEl.textContent = 'Desktop — Anteprima 3D';
+  hintEl.textContent = 'Usa mobile per AR';
+  arBtn.textContent  = '🖱 Ruota il modello in 3D';
+}
+
+var mv = document.getElementById('mv');
+
+if (!src) {
+  showErr('Nessun file specificato.', 'Torna alla dashboard e usa il pulsante 🥽 su un modello.');
+} else {
+  /*
+   * Il percorso src è relativo alla stessa GitHub Pages repo.
+   * Es: src = "models/sedia.glb"
+   * → viene caricato da: https://daniloevil.github.io/ar-qr/models/sedia.glb
+   *
+   * Stesso dominio = zero problemi CORS.
+   * model-viewer lo carica direttamente, senza proxy, senza token.
+   */
+  mv.setAttribute('src', src);
+  mv.setAttribute('alt', name);
+}
+
+mv.addEventListener('load', function() {
+  document.getElementById('loading').classList.add('done');
+  arBtn.disabled = false;
+});
+
+mv.addEventListener('error', function() {
+  document.getElementById('loading').classList.add('done');
+  showErr(
+    'File non trovato: ' + src,
+    'Assicurati di aver caricato il file .glb nella cartella models/ del repository GitHub.\n\n' +
+    'Il file deve trovarsi esattamente a:\n' + src
+  );
+});
+
+mv.addEventListener('ar-status', function(e) {
+  if (e.detail.status === 'failed') {
+    alert(
+      'AR non riuscita su questo dispositivo.\n\n' +
+      'Su iOS: apri in Safari (non Chrome).\n' +
+      'Su Android: assicurati di avere Google Play Services per AR.'
+    );
+  }
+});
+
+function launchAR() {
+  if (!isMobile) {
+    alert('La Realtà Aumentata richiede uno smartphone.\nScansiona il QR Code con il tuo iPhone o Android.');
+    return;
+  }
+  mv.activateAR();
+}
+
+function showErr(title, hint) {
+  document.getElementById('loading').classList.add('done');
+  var es = document.getElementById('err-state');
+  es.style.display = 'flex';
+  document.getElementById('errTitle').textContent = title;
+  var h = document.getElementById('errHint');
+  h.style.whiteSpace = 'pre-line';
+  h.textContent = hint || '';
+  arBtn.disabled = true;
+}
+</script>
+</body>
+</html>
