@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WebAR Viewer</title>
+
+  <!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  WebAR QR-Marker Viewer                                      ║
+  ║  Stack: Three.js r128 + jsQR + GLTFLoader                   ║
+  ║                                                              ║
+  ║  Come funziona:                                              ║
+  ║  1. Il QR code stampato contiene l'URL con ?model=nome       ║
+  ║  2. Scansione con fotocamera nativa → apre questa pagina     ║
+  ║  3. jsQR rileva il QR dalla fotocamera in tempo reale        ║
+  ║  4. La posizione dei 4 angoli calcola la posa 3D             ║
+  ║  5. Three.js sovrappone il modello .glb sopra il QR          ║
+  ║                                                              ║
+  ║  File necessari su GitHub (cartella models/):                ║
+  ║    models/pezzo1.glb   → il modello 3D                      ║
+  ║  NON servono più file .mind                                  ║
+  ╚══════════════════════════════════════════════════════════════╝
+  -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d0d0d;
+      --surface: #1a1a1a;
+      --border:  rgba(255,255,255,0.08);
+      --accent:  #3ecfcf;
+      --text:    #f0f0f0;
+      --muted:   #666;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* ══ SCHERMATA RICERCA ══ */
+    #search-screen {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 40px 28px;
+      background: var(--bg);
+    }
+    #search-screen.hidden { display: none; }
+
+    .logo-mark {
+      width: 52px; height: 52px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(62,207,207,0.18), rgba(62,207,207,0.06));
+      border: 1px solid rgba(62,207,207,0.3);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 28px;
+    }
+    .logo-mark svg { width: 26px; height: 26px; stroke: var(--accent); }
+
+    .app-name {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 0.18em; color: var(--accent);
+      text-transform: uppercase; margin-bottom: 16px;
+    }
+    .search-title {
+      font-size: 28px; font-weight: 700;
+      text-align: center; line-height: 1.2;
+      margin-bottom: 10px; letter-spacing: -0.5px;
+    }
+    .search-sub {
+      font-size: 14px; color: var(--muted);
+      text-align: center; margin-bottom: 44px; line-height: 1.7;
+    }
+    .search-row {
+      width: 100%; max-width: 400px;
+      display: flex; align-items: center;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 50px;
+      padding: 4px 4px 4px 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 14px;
+    }
+    .search-row:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(62,207,207,0.12);
+    }
+    #search-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 16px; padding: 13px 0;
+      caret-color: var(--accent); min-width: 0;
+    }
+    #search-input::placeholder { color: var(--muted); }
+    #search-go {
+      background: var(--accent); color: #000; border: none;
+      border-radius: 40px; padding: 13px 22px;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0; transition: opacity 0.15s;
+    }
+    #search-go:active { opacity: 0.75; }
+    #input-error { font-size: 13px; color: #e55; text-align: center; min-height: 18px; }
+
+    .hint-row {
+      margin-top: 32px; display: flex; align-items: center;
+      gap: 10px; font-size: 12px; color: var(--muted);
+    }
+    .hint-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+
+    /* ══ AR SCREEN ══ */
+    #ar-screen { position: fixed; inset: 0; z-index: 10; display: none; }
+    #ar-screen.visible { display: block; }
+
+    #video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; z-index: 1;
+    }
+    #three-canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 2; pointer-events: none;
+    }
+    #qr-canvas { display: none; }
+
+    /* ══ UI OVERLAY ══ */
+    #ar-ui { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+
+    #top-bar {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: max(16px, env(safe-area-inset-top)) 16px 14px;
+      display: flex; align-items: center; gap: 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
+      pointer-events: auto;
+    }
+    #back-btn {
+      width: 40px; height: 40px;
+      background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px; color: #fff; font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      flex-shrink: 0;
+    }
+    #model-label {
+      flex: 1; font-size: 15px; font-weight: 600;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Mirino scansione */
+    #scan-hint {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+      transition: opacity 0.5s; pointer-events: none;
+    }
+    #scan-hint.hidden { opacity: 0; }
+
+    .qr-viewfinder { width: 210px; height: 210px; position: relative; }
+    .qr-viewfinder::before {
+      content: ''; position: absolute;
+      left: 8px; right: 8px; height: 2px;
+      background: linear-gradient(to right, transparent, var(--accent), transparent);
+      animation: scan-line 2s ease-in-out infinite;
+      border-radius: 1px;
+    }
+    @keyframes scan-line {
+      0%   { top: 12%; opacity: 0.3; }
+      50%  { opacity: 1; }
+      100% { top: 88%; opacity: 0.3; }
+    }
+    .qr-viewfinder .corner {
+      position: absolute; width: 30px; height: 30px;
+      border-color: var(--accent); border-style: solid; opacity: 0.9;
+    }
+    .corner.tl { top: 0; left: 0;   border-width: 3px 0 0 3px; border-radius: 6px 0 0 0; }
+    .corner.tr { top: 0; right: 0;  border-width: 3px 3px 0 0; border-radius: 0 6px 0 0; }
+    .corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 6px 0; }
+    .corner.bl { bottom: 0; left: 0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 6px; }
+
+    .scan-label {
+      font-size: 14px; font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      text-shadow: 0 1px 8px rgba(0,0,0,1);
+      text-align: center; line-height: 1.6;
+    }
+
+    /* Badge tracking */
+    #tracking-badge {
+      position: absolute;
+      bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+      left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(0,0,0,0.6); border: 1px solid rgba(62,207,207,0.4);
+      border-radius: 30px; padding: 10px 20px;
+      font-size: 13px; font-weight: 600; color: var(--accent);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      opacity: 0; transition: opacity 0.4s;
+      pointer-events: none; white-space: nowrap;
+    }
+    #tracking-badge.visible { opacity: 1; }
+    .badge-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent);
+      animation: blink 1.4s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Loading */
+    #loading-overlay {
+      position: fixed; inset: 0; z-index: 45;
+      background: var(--bg); display: none;
+      flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    }
+    #loading-overlay.visible { display: flex; }
+    .spinner {
+      width: 42px; height: 42px;
+      border: 2.5px solid rgba(62,207,207,0.15);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-msg { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.7; }
+
+    /* Error toast */
+    #error-toast {
+      position: fixed;
+      bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+      left: 50%; transform: translateX(-50%);
+      background: rgba(200,50,50,0.92); color: #fff;
+      padding: 12px 22px; border-radius: 30px;
+      font-size: 13px; font-weight: 600; z-index: 100;
+      display: none; white-space: nowrap; backdrop-filter: blur(8px);
+    }
+    #error-toast.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- ════ SCHERMATA RICERCA ════ -->
+  <div id="search-screen">
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9V6a1 1 0 011-1h3M15 5h3a1 1 0 011 1v3M21 15v3a1 1 0 01-1 1h-3M9 19H6a1 1 0 01-1-1v-3"/>
+        <rect x="9" y="9" width="6" height="6" rx="1"/>
+      </svg>
+    </div>
+    <p class="app-name">WebAR Viewer</p>
+    <h1 class="search-title">Visualizza il pezzo<br>in realtà aumentata</h1>
+    <p class="search-sub">Inserisci il nome del modello, poi<br>inquadra il QR code stampato con la fotocamera</p>
+
+    <div class="search-row">
+      <input type="text" id="search-input"
+        placeholder="es: flangia"
+        autocomplete="off" autocorrect="off"
+        autocapitalize="none" spellcheck="false" />
+      <button id="search-go" onclick="loadFromInput()">Carica →</button>
+    </div>
+    <p id="input-error"></p>
+
+    <div class="hint-row">
+      <div class="hint-dot"></div>
+      Il QR code stampato funge da marker AR
+    </div>
+  </div>
+
+  <!-- ════ AR SCREEN ════ -->
+  <div id="ar-screen">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="three-canvas"></canvas>
+    <canvas id="qr-canvas"></canvas>
+
+    <div id="ar-ui">
+      <div id="top-bar">
+        <button id="back-btn" onclick="goBack()">←</button>
+        <span id="model-label">—</span>
+      </div>
+
+      <div id="scan-hint">
+        <div class="qr-viewfinder">
+          <div class="corner tl"></div>
+          <div class="corner tr"></div>
+          <div class="corner br"></div>
+          <div class="corner bl"></div>
+        </div>
+        <p class="scan-label">Inquadra il QR code stampato</p>
+      </div>
+
+      <div id="tracking-badge">
+        <div class="badge-dot"></div>
+        QR rilevato · modello in AR
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ LOADING ════ -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p id="loading-msg">Avvio fotocamera…</p>
+  </div>
+
+  <div id="error-toast"></div>
+
+  <script>
+    // ════════════════════════════════════════════════════
+    //  CONFIGURAZIONE
+    // ════════════════════════════════════════════════════
+    const CONFIG = {
+      githubUser:   'daniloevil',
+      githubRepo:   'ar.qr.app',
+      githubBranch: 'main',
+      modelsFolder: 'models',
+
+      // Lato del QR code fisico stampato, in METRI
+      // Misura il quadrato del QR sul foglio e inserisci il valore
+      qrSizeMeters: 0.10,
+
+      // Scala del modello rispetto al lato del QR (1.0 = stesso lato del QR)
+      modelScale: 0.8,
+
+      // Altezza di "fluttuazione" sopra il QR in metri
+      modelLift: 0.01,
+
+      // Rotazione iniziale in gradi (SolidWorks Z-up → Three.js Y-up)
+      // Se il modello appare capovolto prova { x: 90, y: 0, z: 0 }
+      modelRotation: { x: -90, y: 0, z: 0 },
+
+      // FOV orizzontale stimato fotocamera posteriore (tipico: 60-70°)
+      cameraHFovDeg: 65,
+
+      // Frequenza scansione QR in ms (100-200 = buon compromesso)
+      qrScanIntervalMs: 130,
+
+      // Delay prima di nascondere il modello dopo aver perso il QR
+      trackingLostDelayMs: 400,
+    };
+
+    // ════════════════════════════════════════════════════
+    //  STATO
+    // ════════════════════════════════════════════════════
+    let threeScene, threeCamera, threeRenderer, gltfLoader;
+    let modelGroup       = null;
+    let cameraStream     = null;
+    let animFrameId      = null;
+    let lastScanTime     = 0;
+    let isTracking       = false;
+    let lostTimer        = null;
+    let currentModelName = null;
+    let loadingModelName = null;
+
+    const $ = id => document.getElementById(id);
+
+    // ════════════════════════════════════════════════════
+    //  UI HELPERS
+    // ════════════════════════════════════════════════════
+    const showLoading = msg => {
+      $('loading-msg').innerHTML = msg || 'Caricamento…';
+      $('loading-overlay').classList.add('visible');
+    };
+    const hideLoading = () => $('loading-overlay').classList.remove('visible');
+
+    function showInputError(msg) {
+      $('input-error').textContent = msg;
+      setTimeout(() => ($('input-error').textContent = ''), 3000);
+    }
+    function showError(msg) {
+      const t = $('error-toast');
+      t.textContent = msg;
+      t.classList.add('visible');
+      setTimeout(() => t.classList.remove('visible'), 5000);
+    }
+
+    function setTracking(on) {
+      if (on === isTracking) return;
+      isTracking = on;
+      $('scan-hint').classList.toggle('hidden', on);
+      $('tracking-badge').classList.toggle('visible', on);
+      if (modelGroup) modelGroup.visible = on;
+    }
+
+    // ════════════════════════════════════════════════════
+    //  ESTRAZIONE MODELLO DAL QR
+    // ════════════════════════════════════════════════════
+    function extractModelName(data) {
+      try {
+        const url = new URL(data);
+        const m = url.searchParams.get('model');
+        if (m) return m.replace(/\.(glb|gltf|usdz)$/i, '');
+      } catch {}
+      const clean = data.trim();
+      if (/^[\w\-\.]+$/i.test(clean))
+        return clean.replace(/\.(glb|gltf|usdz)$/i, '');
+      return null;
+    }
+
+    function modelCdnUrl(name) {
+      const folder = CONFIG.modelsFolder ? CONFIG.modelsFolder + '/' : '';
+      return `https://cdn.jsdelivr.net/gh/${CONFIG.githubUser}/${CONFIG.githubRepo}@${CONFIG.githubBranch}/${folder}${name}.glb`;
+    }
+
+    // ════════════════════════════════════════════════════
+    //  INPUT MANUALE
+    // ════════════════════════════════════════════════════
+    $('search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadFromInput();
+    });
+    function loadFromInput() {
+      const val = $('search-input').value.trim();
+      if (!val) { showInputError('Inserisci il nome del modello'); return; }
+      startAR(val.replace(/\.(glb|gltf|usdz)$/i, ''));
+    }
+
+    // ════════════════════════════════════════════════════
+    //  AVVIO AR
+    // ════════════════════════════════════════════════════
+    async function startAR(modelName) {
+      currentModelName = modelName;
+      $('model-label').textContent = modelName.replace(/[-_]/g, ' ');
+      history.pushState({}, '', `${location.pathname}?model=${encodeURIComponent(modelName)}`);
+
+      showLoading('Avvio fotocamera…');
+      $('search-screen').classList.add('hidden');
+      $('ar-screen').classList.add('visible');
+
+      try {
+        await initCamera();
+        initThree();
+        loadModel(modelName);
+        startLoop();
+        hideLoading();
+      } catch (err) {
+        console.error(err);
+        hideLoading();
+        showError('Impossibile accedere alla fotocamera');
+        goBack();
+      }
+    }
+
+    // ════════════════════════════════════════════════════
+    //  CAMERA
+    // ════════════════════════════════════════════════════
+    async function initCamera() {
+      const video = $('video');
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      video.srcObject = cameraStream;
+      await new Promise((res, rej) => {
+        video.onloadedmetadata = res;
+        setTimeout(() => rej(new Error('Camera timeout')), 10000);
+      });
+      video.play();
+
+      const qc = $('qr-canvas');
+      qc.width  = video.videoWidth;
+      qc.height = video.videoHeight;
+    }
+
+    function stopCamera() {
+      if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+    }
+
+    // ════════════════════════════════════════════════════
+    //  THREE.JS
+    // ════════════════════════════════════════════════════
+    function initThree() {
+      const W = window.innerWidth, H = window.innerHeight, asp = W / H;
+
+      threeScene = new THREE.Scene();
+
+      // Calcola FOV verticale dal FOV orizzontale
+      const hR = CONFIG.cameraHFovDeg * Math.PI / 180;
+      const vFov = 2 * Math.atan(Math.tan(hR / 2) / asp) * (180 / Math.PI);
+
+      threeCamera = new THREE.PerspectiveCamera(vFov, asp, 0.001, 200);
+      threeCamera.position.set(0, 0, 0);
+
+      threeRenderer = new THREE.WebGLRenderer({
+        canvas: $('three-canvas'),
+        alpha: true,       // sfondo trasparente → video visibile sotto
+        antialias: true,
+      });
+      threeRenderer.setSize(W, H);
+      threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      threeRenderer.outputEncoding = THREE.sRGBEncoding;
+
+      // Luci per materiali metallici SolidWorks
+      threeScene.add(new THREE.AmbientLight(0xffffff, 0.8));
+      const d1 = new THREE.DirectionalLight(0xffffff, 1.3);
+      d1.position.set(1, 2, 1);
+      threeScene.add(d1);
+      const d2 = new THREE.DirectionalLight(0xaaddff, 0.5);
+      d2.position.set(-1, 0.5, -1);
+      threeScene.add(d2);
+
+      gltfLoader = new THREE.GLTFLoader();
+      window.addEventListener('resize', onResize);
+    }
+
+    function onResize() {
+      if (!threeRenderer) return;
+      const W = window.innerWidth, H = window.innerHeight;
+      threeCamera.aspect = W / H;
+      threeCamera.updateProjectionMatrix();
+      threeRenderer.setSize(W, H);
+    }
+
+    // ════════════════════════════════════════════════════
+    //  CARICAMENTO MODELLO GLB
+    // ════════════════════════════════════════════════════
+    function loadModel(name) {
+      if (loadingModelName === name) return;
+      loadingModelName = name;
+
+      if (modelGroup) { threeScene.remove(modelGroup); modelGroup = null; }
+
+      gltfLoader.load(modelCdnUrl(name), gltf => {
+        const mesh = gltf.scene;
+
+        // Normalizza scala: bounding box → CONFIG.qrSizeMeters * CONFIG.modelScale
+        const box = new THREE.Box3().setFromObject(mesh);
+        const sz  = new THREE.Vector3();
+        box.getSize(sz);
+        const maxDim = Math.max(sz.x, sz.y, sz.z) || 1;
+        const targetM = CONFIG.qrSizeMeters * CONFIG.modelScale;
+        const s = targetM / maxDim;
+        mesh.scale.set(s, s, s);
+
+        // Centra il modello nell'origine del group
+        const center = new THREE.Vector3();
+        new THREE.Box3().setFromObject(mesh).getCenter(center);
+        mesh.position.sub(center);
+
+        // Alza sopra il piano del QR
+        mesh.position.y += CONFIG.modelLift;
+
+        // Rotazione iniziale (correzione SolidWorks Z-up → Y-up)
+        mesh.rotation.set(
+          CONFIG.modelRotation.x * Math.PI / 180,
+          CONFIG.modelRotation.y * Math.PI / 180,
+          CONFIG.modelRotation.z * Math.PI / 180
+        );
+
+        // Il group riceve la posa del QR;
+        // il mesh figlio ha la rotazione/offset locale
+        modelGroup = new THREE.Group();
+        modelGroup.add(mesh);
+        modelGroup.visible = false;
+        threeScene.add(modelGroup);
+
+      }, undefined, err => {
+        console.error('GLB error:', err);
+        showError(`Modello "${name}.glb" non trovato su GitHub`);
+        loadingModelName = null;
+      });
+    }
+
+    // ════════════════════════════════════════════════════
+    //  SCANSIONE QR CODE (jsQR)
+    // ════════════════════════════════════════════════════
+    let qrCtx = null;
+
+    function scanQR() {
+      const video = $('video');
+      const qc    = $('qr-canvas');
+      if (!video || video.readyState < 2 || !qc.width) return;
+
+      if (!qrCtx) qrCtx = qc.getContext('2d', { willReadFrequently: true });
+      qrCtx.drawImage(video, 0, 0, qc.width, qc.height);
+      const id = qrCtx.getImageData(0, 0, qc.width, qc.height);
+
+      const code = jsQR(id.data, id.width, id.height, { inversionAttempts: 'attemptBoth' });
+
+      if (code) onQRFound(code, qc.width, qc.height);
+      else       onQRLost();
+    }
+
+    function onQRFound(code, vw, vh) {
+      // Se il QR contiene un modello diverso, caricalo
+      const nameInQR = extractModelName(code.data);
+      if (nameInQR && nameInQR !== currentModelName) {
+        currentModelName  = nameInQR;
+        loadingModelName  = null;
+        $('model-label').textContent = nameInQR.replace(/[-_]/g, ' ');
+        history.replaceState({}, '', `${location.pathname}?model=${encodeURIComponent(nameInQR)}`);
+        loadModel(nameInQR);
+      }
+
+      if (!modelGroup) return; // GLB ancora in caricamento
+
+      const pose = computePose(code.location, vw, vh);
+      modelGroup.position.copy(pose.position);
+      modelGroup.quaternion.copy(pose.quaternion);
+      modelGroup.visible = true;
+
+      clearTimeout(lostTimer);
+      setTracking(true);
+    }
+
+    function onQRLost() {
+      clearTimeout(lostTimer);
+      lostTimer = setTimeout(() => setTracking(false), CONFIG.trackingLostDelayMs);
+    }
+
+    // ════════════════════════════════════════════════════
+    //  CALCOLO POSA 3D (modello pinhole camera)
+    //
+    //  depth   = (qrSize_reale × focalePx) / qrSize_pixel
+    //  X_3D    =  (px - cx) / focalePx × depth
+    //  Y_3D    = -(py - cy) / focalePx × depth   (Y invertita schermo→OpenGL)
+    //  Z_3D    = -depth                           (Z negativo = avanti)
+    //
+    //  La rotazione è ricavata dagli assi del QR nel piano immagine,
+    //  convertiti nel sistema 3D della camera Three.js.
+    // ════════════════════════════════════════════════════
+    function computePose(loc, vw, vh) {
+      const { topLeftCorner: tl, topRightCorner: tr,
+              bottomRightCorner: br, bottomLeftCorner: bl } = loc;
+
+      // Centro del QR in pixel
+      const pcx = (tl.x + tr.x + br.x + bl.x) / 4;
+      const pcy = (tl.y + tr.y + br.y + bl.y) / 4;
+
+      // Dimensione apparente media (media dei 4 lati)
+      const topW   = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+      const botW   = Math.hypot(br.x - bl.x, br.y - bl.y);
+      const leftH  = Math.hypot(bl.x - tl.x, bl.y - tl.y);
+      const rightH = Math.hypot(br.x - tr.x, br.y - tr.y);
+      const appPx  = (topW + botW + leftH + rightH) / 4;
+
+      // Lunghezza focale in pixel
+      const hR      = CONFIG.cameraHFovDeg * Math.PI / 180;
+      const focalPx = (vw / 2) / Math.tan(hR / 2);
+
+      // Profondità e posizione 3D
+      const depth = (CONFIG.qrSizeMeters * focalPx) / Math.max(appPx, 1);
+      const x =  ((pcx - vw / 2) / focalPx) * depth;
+      const y = -((pcy - vh / 2) / focalPx) * depth;
+      const z = -depth;
+
+      // Assi del QR nel piano immagine → 3D (Y schermo invertita)
+      const rLen = Math.hypot(tr.x - tl.x, tr.y - tl.y) || 1;
+      const right = new THREE.Vector3((tr.x - tl.x) / rLen, -(tr.y - tl.y) / rLen, 0);
+
+      const dLen  = Math.hypot(bl.x - tl.x, bl.y - tl.y) || 1;
+      const up    = new THREE.Vector3(-(bl.x - tl.x) / dLen,  (bl.y - tl.y) / dLen, 0);
+
+      // Normale al piano del QR (punta verso la camera)
+      const normal = new THREE.Vector3().crossVectors(right, up).normalize();
+
+      // Ortonormalizza gli assi
+      const trueRight = new THREE.Vector3().crossVectors(up, normal).normalize();
+      const trueUp    = new THREE.Vector3().crossVectors(normal, trueRight).normalize();
+
+      // Matrice di rotazione: colonne = assi locali del QR
+      // Z locale punta DENTRO al foglio (lontano dalla camera)
+      const rotMat = new THREE.Matrix4().makeBasis(trueRight, trueUp, normal.clone().negate());
+      const quaternion = new THREE.Quaternion().setFromRotationMatrix(rotMat);
+
+      return { position: new THREE.Vector3(x, y, z), quaternion };
+    }
+
+    // ════════════════════════════════════════════════════
+    //  LOOP DI RENDERING
+    // ════════════════════════════════════════════════════
+    function startLoop() {
+      function loop() {
+        animFrameId = requestAnimationFrame(loop);
+        const now = performance.now();
+        if (now - lastScanTime >= CONFIG.qrScanIntervalMs) {
+          scanQR();
+          lastScanTime = now;
+        }
+        threeRenderer.render(threeScene, threeCamera);
+      }
+      loop();
+    }
+
+    function stopLoop() {
+      if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+    }
+
+    // ════════════════════════════════════════════════════
+    //  TORNA ALLA RICERCA
+    // ════════════════════════════════════════════════════
+    function goBack() {
+      stopLoop();
+      stopCamera();
+      clearTimeout(lostTimer);
+      window.removeEventListener('resize', onResize);
+
+      if (threeRenderer) { threeRenderer.dispose(); threeRenderer = null; }
+      if (modelGroup && threeScene) threeScene.remove(modelGroup);
+
+      threeScene = threeCamera = gltfLoader = modelGroup = qrCtx = null;
+      currentModelName = loadingModelName = null;
+      isTracking = false;
+
+      $('ar-screen').classList.remove('visible');
+      $('scan-hint').classList.remove('hidden');
+      $('tracking-badge').classList.remove('visible');
+      history.pushState({}, '', location.pathname);
+      $('search-screen').classList.remove('hidden');
+      $('search-input').value = '';
+    }
+
+    // ════════════════════════════════════════════════════
+    //  AVVIO DA QR (?model=...)
+    // ════════════════════════════════════════════════════
+    const urlModel = new URLSearchParams(location.search).get('model');
+    if (urlModel) startAR(urlModel.replace(/\.(glb|gltf|usdz)$/i, ''));
+  </script>
+</body>
+</html>
