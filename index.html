@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>WebAR Viewer</title>
+
+  <!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  WebAR Marker-Based Viewer                                   ║
+  ║  Stack: MindAR.js + A-Frame + qrcode.js                     ║
+  ║  Il modello 3D appare ANCORATO sopra il foglio stampato      ║
+  ║                                                              ║
+  ║  Per ogni pezzo servono due file su GitHub:                  ║
+  ║    models/pezzo1.glb   → il modello 3D                      ║
+  ║    models/pezzo1.mind  → il marker compilato dal logo+QR    ║
+  ╚══════════════════════════════════════════════════════════════╝
+  -->
+
+  <!-- A-Frame: motore 3D WebXR -->
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.4.2/dist/aframe.min.js" crossorigin="anonymous"></script>
+  <!-- MindAR: image tracking (rileva il logo stampato e ancora il modello) -->
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" crossorigin="anonymous"></script>
+  <!-- QR Code generator lato client -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d0d0d;
+      --surface: #1c1c1c;
+      --border:  rgba(255,255,255,0.09);
+      --accent:  #3ecfcf;
+      --text:    #f0f0f0;
+      --muted:   #777;
+      --radius:  14px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ══ SCHERMATA RICERCA ══ */
+    #search-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      background: var(--bg);
+      transition: opacity 0.3s;
+    }
+    #search-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .logo {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 40px;
+    }
+    .search-title {
+      font-size: 26px;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.25;
+      margin-bottom: 10px;
+    }
+    .search-sub {
+      font-size: 14px;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    .search-row {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 50px;
+      padding: 4px 4px 4px 22px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 16px;
+    }
+    .search-row:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(62,207,207,0.13);
+    }
+    #search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 16px;
+      padding: 12px 0;
+      caret-color: var(--accent);
+      min-width: 0;
+    }
+    #search-input::placeholder { color: var(--muted); }
+
+    #search-go {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 40px;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    #search-go:active { opacity: 0.72; }
+
+    /* Messaggio di errore inline sotto il campo */
+    #input-error {
+      font-size: 13px;
+      color: #e55;
+      text-align: center;
+      min-height: 20px;
+      transition: opacity 0.2s;
+    }
+
+    /* ══ CONTENITORE A-FRAME (iniettato via JS) ══ */
+    #ar-container {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: none;
+    }
+    #ar-container.visible { display: block; }
+
+    /*
+      A-Frame con l'attributo "embedded" rispetta il contenitore.
+      Questi stili forzano la scena a coprire tutto lo schermo.
+    */
+    #ar-container a-scene {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ══ OVERLAY UI SOPRA LA SCENA AR ══ */
+    #ar-ui {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      display: none;
+    }
+    #ar-ui.visible { display: block; }
+
+    /* Top bar */
+    #top-bar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: max(14px, env(safe-area-inset-top)) 16px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+      pointer-events: auto;
+    }
+    #back-btn {
+      background: rgba(255,255,255,0.13);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      width: 40px; height: 40px;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    #model-name {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Hint di scansione (al centro, scompare quando il marker è trovato) */
+    #scan-hint {
+      position: absolute;
+      bottom: 160px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+    #scan-hint.found { opacity: 0; }
+
+    .scan-frame {
+      width: 180px;
+      height: 180px;
+      position: relative;
+    }
+    /* Angoli animati del mirino */
+    .scan-frame::before,
+    .scan-frame::after,
+    .scan-corner-br,
+    .scan-corner-bl {
+      content: '';
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-color: var(--accent);
+      border-style: solid;
+      animation: pulse-scan 2s ease-in-out infinite;
+    }
+    .scan-frame::before  { top: 0;    left: 0;  border-width: 3px 0 0 3px; border-radius: 6px 0 0 0; }
+    .scan-frame::after   { top: 0;    right: 0; border-width: 3px 3px 0 0; border-radius: 0 6px 0 0; animation-delay: 0.15s; }
+    .scan-corner-br      { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 6px 0; animation-delay: 0.3s; }
+    .scan-corner-bl      { bottom: 0; left: 0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 6px; animation-delay: 0.45s; }
+
+    @keyframes pulse-scan {
+      0%, 100% { opacity: 0.5; }
+      50%       { opacity: 1;   }
+    }
+
+    .scan-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    /* Badge "Marker rilevato" (appare quando il modello è visibile) */
+    #found-badge {
+      position: absolute;
+      bottom: 160px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(62,207,207,0.18);
+      border: 1px solid rgba(62,207,207,0.5);
+      border-radius: 30px;
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+    }
+    #found-badge.visible { opacity: 1; }
+
+    /* Pulsante QR grande in basso */
+    #qr-fab {
+      position: absolute;
+      bottom: calc(36px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 40px;
+      background: rgba(15,15,15,0.85);
+      border: 1.5px solid rgba(255,255,255,0.18);
+      color: var(--text);
+      border-radius: 60px;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      pointer-events: auto;
+      transition: transform 0.15s;
+    }
+    #qr-fab:active { transform: translateX(-50%) scale(0.96); }
+
+    /* ══ LOADING OVERLAY ══ */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+    #loading-overlay.visible { display: flex; }
+
+    .spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(62,207,207,0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-size: 15px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* ══ MODALE QR (bottom sheet) ══ */
+    #qr-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 60;
+      align-items: flex-end;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    #qr-modal.visible { display: flex; }
+
+    #qr-card {
+      background: #fff;
+      border-radius: 24px 24px 0 0;
+      padding: 28px 24px calc(28px + env(safe-area-inset-bottom, 0px));
+      width: min(480px, 100vw);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .qr-handle { width: 40px; height: 4px; background: #ddd; border-radius: 2px; margin-bottom: 4px; }
+    #qr-card h3 { font-size: 17px; color: #111; font-weight: 700; }
+    #qr-card .qr-hint { font-size: 13px; color: #888; text-align: center; line-height: 1.5; margin-top: -4px; }
+    #qr-code-container canvas,
+    #qr-code-container img { border-radius: 10px; }
+    #qr-url { font-size: 11px; color: #999; word-break: break-all; text-align: center; max-width: 320px; }
+    .qr-actions { display: flex; gap: 12px; width: 100%; }
+    .qr-actions button {
+      flex: 1; padding: 14px; border-radius: 14px;
+      font-size: 15px; font-weight: 600; cursor: pointer; border: none;
+    }
+    #btn-download { background: #111; color: #fff; }
+    #btn-close    { background: #f0f0f0; color: #111; }
+  </style>
+</head>
+<body>
+
+  <!-- ════ SCHERMATA 1: RICERCA ════ -->
+  <div id="search-screen">
+    <p class="logo">WebAR Viewer</p>
+    <h1 class="search-title">Visualizza il pezzo<br>in realtà aumentata</h1>
+    <p class="search-sub">Inserisci il nome del file .glb<br>e inquadra il foglio stampato con la fotocamera</p>
+
+    <div class="search-row">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="es: flangia.glb"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="none"
+        spellcheck="false"
+      />
+      <button id="search-go" onclick="loadFromInput()">Carica →</button>
+    </div>
+    <p id="input-error"></p>
+  </div>
+
+  <!-- ════ CONTENITORE A-FRAME (iniettato dinamicamente) ════ -->
+  <div id="ar-container"></div>
+
+  <!-- ════ OVERLAY UI SOPRA LA SCENA AR ════ -->
+  <div id="ar-ui">
+    <div id="top-bar">
+      <button id="back-btn" onclick="goBack()">←</button>
+      <span id="model-name">—</span>
+    </div>
+
+    <!-- Mirino di scansione -->
+    <div id="scan-hint">
+      <div class="scan-frame">
+        <div class="scan-corner-br"></div>
+        <div class="scan-corner-bl"></div>
+      </div>
+      <p class="scan-label">Inquadra il foglio<br>con il logo stampato</p>
+    </div>
+
+    <!-- Badge marker trovato -->
+    <div id="found-badge">✓ Marker rilevato</div>
+
+    <!-- Pulsante QR -->
+    <button id="qr-fab" onclick="openQR()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="3" height="3"/>
+        <rect x="18" y="14" width="3" height="3"/>
+        <rect x="14" y="18" width="3" height="3"/>
+        <rect x="18" y="18" width="3" height="3"/>
+      </svg>
+      Genera QR Code
+    </button>
+  </div>
+
+  <!-- ════ LOADING ════ -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p class="loading-text">Avvio fotocamera<br>e caricamento modello…</p>
+  </div>
+
+  <!-- ════ MODALE QR ════ -->
+  <div id="qr-modal" onclick="closeQROnBackdrop(event)">
+    <div id="qr-card">
+      <div class="qr-handle"></div>
+      <h3>Scansiona per aprire in AR</h3>
+      <p class="qr-hint">Punta la fotocamera su questo codice<br>per aprire la pagina AR</p>
+      <div id="qr-code-container"></div>
+      <p id="qr-url"></p>
+      <div class="qr-actions">
+        <button id="btn-download" onclick="downloadQR()">⬇ Scarica PNG</button>
+        <button id="btn-close"    onclick="closeQR()">Chiudi</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ════════════════════════════════════════════════════
+    //  CONFIGURAZIONE — modifica questi valori
+    // ════════════════════════════════════════════════════
+    const CONFIG = {
+      githubUser:   'daniloevil',
+      githubRepo:   'ar.qr.app',
+      githubBranch: 'main',
+      modelsFolder: 'models',
+
+      /*
+        Scala del modello 3D sopra il marker.
+        A-Frame usa i metri: scala 0.1 = il modello occupa ~10cm sulla scena.
+        I pezzi SolidWorks sono spesso in mm → prova 0.001 come primo tentativo,
+        poi aumenta o diminuisci finché la dimensione visiva è corretta.
+        Esempi:
+          scala 0.001  → pezzo originale in mm, appare a dimensione reale
+          scala 0.01   → pezzo più grande, comodo da osservare da lontano
+          scala 0.1    → grande, per pezzi molto piccoli
+      */
+      modelScale: '0.05 0.05 0.05',
+
+      /*
+        Rotazione iniziale del modello (gradi X Y Z).
+        SolidWorks esporta spesso con Z verso l'alto → '-90 0 0' lo corregge.
+        Se il modello appare capovolto prova '90 0 0'.
+      */
+      modelRotation: '-90 0 0',
+    };
+
+    // ════════════════════════════════════════════════════
+    //  UTILITÀ URL
+    // ════════════════════════════════════════════════════
+    function cdnUrl(file) {
+      const folder = CONFIG.modelsFolder ? CONFIG.modelsFolder + '/' : '';
+      return `https://cdn.jsdelivr.net/gh/${CONFIG.githubUser}/${CONFIG.githubRepo}@${CONFIG.githubBranch}/${folder}${file}`;
+    }
+    function pageUrl(file) {
+      return `${location.origin}${location.pathname}?model=${encodeURIComponent(file)}`;
+    }
+
+    // ════════════════════════════════════════════════════
+    //  GESTIONE INPUT
+    // ════════════════════════════════════════════════════
+    const searchInput  = document.getElementById('search-input');
+    const inputError   = document.getElementById('input-error');
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadFromInput();
+    });
+
+    function showError(msg) {
+      inputError.textContent = msg;
+      setTimeout(() => inputError.textContent = '', 3000);
+    }
+
+    function loadFromInput() {
+      const val = searchInput.value.trim();
+      if (!val) {
+        showError('Inserisci il nome del file .glb');
+        searchInput.focus();
+        return;
+      }
+      const file = /\.(glb|usdz)$/i.test(val) ? val : val + '.glb';
+      startAR(file);
+    }
+
+    // ════════════════════════════════════════════════════
+    //  AVVIO SESSIONE AR
+    //  Costruisce la scena A-Frame + MindAR dinamicamente
+    // ════════════════════════════════════════════════════
+    let currentFile = null;
+    let qrInstance  = null;
+
+    const searchScr   = document.getElementById('search-screen');
+    const arContainer = document.getElementById('ar-container');
+    const arUI        = document.getElementById('ar-ui');
+    const loadingOv   = document.getElementById('loading-overlay');
+    const modelNameEl = document.getElementById('model-name');
+    const scanHint    = document.getElementById('scan-hint');
+    const foundBadge  = document.getElementById('found-badge');
+
+    function startAR(file) {
+      currentFile = file;
+      const base     = file.replace(/\.(glb|usdz)$/i, '');
+      const glbUrl   = cdnUrl(base + '.glb');
+      const mindUrl  = cdnUrl(base + '.mind');
+
+      // Aggiorna URL del browser per la condivisione
+      history.pushState({}, '', pageUrl(file));
+
+      // Mostra label
+      modelNameEl.textContent = base.replace(/[-_]/g, ' ');
+
+      // Reset QR
+      qrInstance = null;
+      document.getElementById('qr-code-container').innerHTML = '';
+
+      // Mostra loading
+      loadingOv.classList.add('visible');
+
+      // Nascondi ricerca
+      searchScr.classList.add('hidden');
+
+      /*
+        Costruisce la scena A-Frame come stringa HTML e la inietta nel DOM.
+        MindAR si avvia automaticamente non appena l'elemento è nel DOM.
+
+        Attributi chiave:
+        - mindar-image: punta al file .mind specifico del pezzo
+        - uiLoading/uiError/uiScanning: 'no' perché gestiamo noi la UI
+        - embedded: la scena rispetta il contenitore invece di prendere tutto lo schermo
+        - physicallyCorrectLights: illuminazione realistica per i materiali metallici
+      */
+      arContainer.innerHTML = `
+        <a-scene
+          mindar-image="imageTargetSrc: ${mindUrl}; autoStart: true; uiLoading: no; uiError: no; uiScanning: no;"
+          color-space="sRGB"
+          renderer="colorManagement: true;"
+          vr-mode-ui="enabled: false"
+          device-orientation-permission-ui="enabled: false"
+          embedded
+          style="width:100%;height:100dvh;display:block;"
+        >
+          <a-assets>
+            <!-- Precarica il modello GLB prima dell'avvio della scena -->
+            <a-asset-item id="ar-model" src="${glbUrl}"></a-asset-item>
+          </a-assets>
+
+          <!-- Luce ambientale per i materiali metallici SolidWorks -->
+          <a-light type="ambient" color="#ffffff" intensity="0.6"></a-light>
+          <a-light type="directional" color="#ffffff" intensity="1.2"
+                   position="1 2 1"></a-light>
+          <a-light type="directional" color="#aaddff" intensity="0.4"
+                   position="-1 1 -1"></a-light>
+
+          <!-- Camera fissa: MindAR gestisce il movimento internamente -->
+          <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+          <!--
+            Ancora al marker (targetIndex: 0 = primo e unico marker nel file .mind)
+            Il modello è figlio di questo anchor: seguirà il foglio stampato
+            anche quando si sposta o si inclina
+          -->
+          <a-entity mindar-image-target="targetIndex: 0">
+            <a-gltf-model
+              src="#ar-model"
+              position="0 0 0.01"
+              rotation="${CONFIG.modelRotation}"
+              scale="${CONFIG.modelScale}"
+            ></a-gltf-model>
+          </a-entity>
+        </a-scene>
+      `;
+
+      // Riferimento alla scena appena iniettata
+      const scene  = arContainer.querySelector('a-scene');
+      const target = scene.querySelector('[mindar-image-target]');
+
+      // Scena pronta → nascondi loading, mostra UI AR
+      scene.addEventListener('loaded', () => {
+        loadingOv.classList.remove('visible');
+        arContainer.classList.add('visible');
+        arUI.classList.add('visible');
+      });
+
+      // Fallback: se 'loaded' non scatta entro 8s, nascondi comunque il loading
+      setTimeout(() => loadingOv.classList.remove('visible'), 8000);
+
+      // Marker trovato → nascondi mirino, mostra badge
+      target.addEventListener('targetFound', () => {
+        scanHint.classList.add('found');
+        foundBadge.classList.add('visible');
+        setTimeout(() => foundBadge.classList.remove('visible'), 2500);
+      });
+
+      // Marker perso → rimostra il mirino
+      target.addEventListener('targetLost', () => {
+        scanHint.classList.remove('found');
+      });
+    }
+
+    // ════════════════════════════════════════════════════
+    //  TORNA ALLA RICERCA
+    //  Rimuove la scena A-Frame (ferma la fotocamera)
+    // ════════════════════════════════════════════════════
+    function goBack() {
+      // Ferma MindAR e libera la fotocamera
+      const scene = arContainer.querySelector('a-scene');
+      if (scene && scene.systems && scene.systems['mindar-image-system']) {
+        scene.systems['mindar-image-system'].stop();
+      }
+
+      // Rimuove la scena dal DOM
+      arContainer.innerHTML = '';
+      arContainer.classList.remove('visible');
+      arUI.classList.remove('visible');
+      scanHint.classList.remove('found');
+      foundBadge.classList.remove('visible');
+
+      // Ripristina URL e schermata di ricerca
+      history.pushState({}, '', location.pathname);
+      searchScr.classList.remove('hidden');
+      searchInput.value = '';
+      currentFile = null;
+    }
+
+    // Carica direttamente se arriva da QR (?model=...)
+    const urlParams = new URLSearchParams(location.search);
+    if (urlParams.get('model')) {
+      startAR(urlParams.get('model'));
+    }
+
+    // ════════════════════════════════════════════════════
+    //  QR CODE
+    // ════════════════════════════════════════════════════
+    function openQR() {
+      if (!currentFile) return;
+      const url = pageUrl(currentFile);
+      document.getElementById('qr-url').textContent = url;
+      document.getElementById('qr-modal').classList.add('visible');
+
+      if (!qrInstance) {
+        const container = document.getElementById('qr-code-container');
+        container.innerHTML = '';
+        qrInstance = new QRCode(container, {
+          text:         url,
+          width:        240,
+          height:       240,
+          colorDark:    '#000000',
+          colorLight:   '#ffffff',
+          correctLevel: QRCode.CorrectLevel.H,
+        });
+      }
+    }
+
+    function closeQR() {
+      document.getElementById('qr-modal').classList.remove('visible');
+    }
+    function closeQROnBackdrop(e) {
+      if (e.target === document.getElementById('qr-modal')) closeQR();
+    }
+
+    function downloadQR() {
+      const canvas = document.querySelector('#qr-code-container canvas');
+      if (!canvas) return;
+      const pad = 24;
+      const tmp = document.createElement('canvas');
+      tmp.width  = canvas.width  + pad * 2;
+      tmp.height = canvas.height + pad * 2;
+      const ctx = tmp.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, tmp.width, tmp.height);
+      ctx.drawImage(canvas, pad, pad);
+      const url = pageUrl(currentFile);
+      ctx.fillStyle  = '#444';
+      ctx.font       = '11px sans-serif';
+      ctx.textAlign  = 'center';
+      ctx.fillText(
+        url.slice(0, 64) + (url.length > 64 ? '…' : ''),
+        tmp.width / 2,
+        tmp.height - 7
+      );
+      const a      = document.createElement('a');
+      a.download   = `qr-${currentFile.replace(/\.(glb|usdz)$/i, '')}.png`;
+      a.href       = tmp.toDataURL('image/png');
+      a.click();
+    }
+  </script>
+</body>
+</html>
