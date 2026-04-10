@@ -1,100 +1,87 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizzatore CAD AR - Danilo</title>
-    
-    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
-        body { margin: 0; font-family: sans-serif; background: #ffffff; overflow: hidden; }
-        model-viewer { width: 100vw; height: 100vh; background-color: #ffffff; }
-
+        body { margin: 0; overflow: hidden; }
+        /* Mantengo la tua estetica per i tasti */
         .controls {
             position: absolute; top: 20px; left: 20px;
             display: flex; flex-direction: column; gap: 10px; z-index: 100;
         }
-
         .view-btn {
             background: white; border: 2px solid #333; border-radius: 4px;
             padding: 10px 15px; cursor: pointer; font-weight: bold; font-size: 11px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-
-        /* Pulsante AR più visibile per lo smartphone */
-        #ar-button {
-            background-color: #007bff;
-            color: white;
-            border-radius: 8px;
-            border: none;
-            position: absolute;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 15px 25px;
-            font-weight: bold;
-            font-size: 16px;
-            display: block; /* Assicura che sia visibile */
-            z-index: 1000;
+        /* Indicatore di scansione */
+        #scanning-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); color: white;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10; font-family: sans-serif;
         }
     </style>
 </head>
 <body>
 
+    <div id="scanning-overlay">Inquadra il QR/Logo per visualizzare...</div>
+
     <div class="controls">
-        <button class="view-btn" onclick="setView('top')">Vista Alto (Top)</button>
-        <button class="view-btn" onclick="setView('front')">Vista Fronte (Front)</button>
-        <button class="view-btn" onclick="setView('side')">Vista Lato (Side)</button>
+        <button class="view-btn" onclick="rotateModel('top')">Vista Alto</button>
+        <button class="view-btn" onclick="rotateModel('front')">Vista Fronte</button>
+        <button class="view-btn" onclick="rotateModel('side')">Vista Lato</button>
     </div>
 
-    <model-viewer id="viewer" 
-        ar 
-        ar-modes="webxr scene-viewer quick-look" 
-        camera-controls 
-        touch-action="none" 
-        bounds="tight" 
-        interaction-prompt="none"
-        shadow-intensity="0" 
-        exposure="1"
-        environment-image="neutral"
+    <a-scene 
+        mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.001; filterBeta:0.01" 
+        color-space="sRGB" 
+        renderer="colorManagement: true, physicallyCorrectLights" 
+        vr-mode-ui="enabled: false" 
+        device-orientation-permission-ui="enabled: false">
         
-        /* FIX VISTA ALTO: permette alla camera di arrivare a 0 gradi */
-        min-camera-orbit="auto 0deg auto"
-        
-        alt="Modello CAD">
-        
-        <button slot="ar-button" id="ar-button">
-            🚀 VEDI NEL TUO AMBIENTE
-        </button>
-    </model-viewer>
+        <a-assets>
+            <a-asset-item id="cadModel" src=""></a-asset-item>
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity id="target" mindar-image-target="targetIndex: 0">
+            <a-gltf-model id="model-entity" 
+                rotation="0 0 0" 
+                position="0 0.2 0" 
+                scale="0.5 0.5 0.5">
+            </a-gltf-model>
+        </a-entity>
+    </a-scene>
 
     <script>
         const GITHUB_BASE_URL = "https://raw.githubusercontent.com/daniloevil/ar-qr-app/main/models/";
         const urlParams = new URLSearchParams(window.location.search);
         const modelName = urlParams.get('model');
-        const viewer = document.getElementById('viewer');
+        const modelEntity = document.querySelector('#model-entity');
+        const overlay = document.querySelector('#scanning-overlay');
 
         if (modelName) {
             const fileUrl = GITHUB_BASE_URL + modelName + ".glb";
-            viewer.src = fileUrl;
-            // Per iPhone, model-viewer proverà a generare un file USDZ temporaneo dal GLB
-            viewer.iosSrc = fileUrl; 
+            modelEntity.setAttribute('src', fileUrl);
         }
 
-        function setView(view) {
+        // Nasconde l'overlay quando il target viene trovato
+        document.querySelector('#target').addEventListener("targetFound", () => {
+            overlay.style.display = "none";
+        });
+
+        // Logica rotazione (Agisce sul modello, tu muovi il telefono per orbitare)
+        function rotateModel(view) {
             switch(view) {
-                case 'top': 
-                    // 0deg 0deg porta la camera esattamente sopra
-                    viewer.cameraOrbit = "0deg 0deg 100%"; 
-                    break;
-                case 'front': 
-                    viewer.cameraOrbit = "0deg 90deg 100%"; 
-                    break;
-                case 'side': 
-                    viewer.cameraOrbit = "90deg 90deg 100%"; 
-                    break;
+                case 'top': modelEntity.setAttribute('rotation', '90 0 0'); break;
+                case 'front': modelEntity.setAttribute('rotation', '0 0 0'); break;
+                case 'side': modelEntity.setAttribute('rotation', '0 90 0'); break;
             }
-            viewer.jumpCameraToGoal();
         }
     </script>
 </body>
