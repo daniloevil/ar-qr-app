@@ -3,68 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizzatore CAD AR</title>
+    <title>Visualizzatore CAD AR - Danilo</title>
+    
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
     <style>
-        body { margin: 0; font-family: sans-serif; background: #f4f4f4; }
-        model-viewer { width: 100vw; height: 100vh; background-color: #eee; }
-        .error-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; }
+        body { margin: 0; font-family: sans-serif; background: #f4f4f4; overflow: hidden; }
+        
+        /* Contenitore per il visualizzatore */
+        model-viewer { 
+            width: 100vw; 
+            height: 100vh; 
+            background-color: #ffffff; 
+        }
+
+        /* NUOVO: Stile per i tasti delle Viste Standard */
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .view-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #333;
+            border-radius: 4px;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 11px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: background 0.2s;
+        }
+
+        .view-btn:active {
+            background: #ddd;
+        }
+
+        .error-msg { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            text-align: center; 
+            display: none; 
+        }
     </style>
 </head>
 <body>
+
+    <div class="controls">
+        <button class="view-btn" onclick="setView('top')">Vista Alto (Top)</button>
+        <button class="view-btn" onclick="setView('front')">Vista Fronte (Front)</button>
+        <button class="view-btn" onclick="setView('side')">Vista Lato (Side)</button>
+    </div>
 
     <div id="error" class="error-msg">
         <p>⚠️ Modello non specificato o non trovato.</p>
     </div>
 
     <model-viewer id="viewer" 
-    ar 
-    ar-modes="webxr scene-viewer quick-look" 
-    camera-controls 
-    touch-action="none" 
-    
-    /* CENTRAGGIO TOTALE */
-    bounds="tight" 
-    min-camera-orbit="auto auto auto"
-    max-camera-orbit="auto auto auto"
-    
-    /* ILLUMINAZIONE TECNICA */
-    shadow-intensity="0" 
-    environment-image="neutral" 
-    exposure="1"
-    
-    /* COMPORTAMENTO */
-    interaction-prompt="none" 
-    
-    alt="Modello CAD Meccanico">
-    
-    <button slot="ar-button" style="background: white; border: 1px solid #ccc; padding: 10px; position: absolute; bottom: 20px; right: 20px;">
-        Visualizza in AR
-    </button>
-</model-viewer>
+        ar 
+        ar-modes="webxr scene-viewer quick-look" 
+        camera-controls 
+        touch-action="none" 
+        bounds="tight" 
+        interaction-prompt="none"
+        shadow-intensity="0" 
+        exposure="1"
+        environment-image="neutral"
+        alt="Modello CAD">
+        
+        <button slot="ar-button" style="background-color: white; border-radius: 8px; border: 1px solid #333; position: absolute; bottom: 16px; right: 16px; padding: 12px; font-weight: bold;">
+            👋 Visualizza nel tuo spazio
+        </button>
+    </model-viewer>
 
     <script>
-        // CONFIGURAZIONE: Inserisci qui il percorso della tua cartella GitHub
         const GITHUB_BASE_URL = "https://raw.githubusercontent.com/daniloevil/ar-qr-app/main/models/";
 
-        // 1. Legge il parametro 'model' dall'URL (es: ?model=bullone)
         const urlParams = new URLSearchParams(window.location.search);
         const modelName = urlParams.get('model');
-        const viewer = document.getElementById('viewer');
-        const errorDiv = document.getElementById('error');
-
-        if (modelName) {
-            // 2. Costruisce l'URL completo al file .glb
-            const modelPath = `${GITHUB_BASE_URL}${modelName}.glb`;
-            viewer.src = modelPath;
-            
-            // Per compatibilità iOS (Quick Look) serve anche un file .usdz se lo hai, 
-            // altrimenti model-viewer proverà a generarlo al volo o userà il glb.
-            viewer.iosSrc = modelPath; 
-        } else {
-            viewer.style.display = 'none';
-            errorDiv.style.display = 'block';
-        }
-    </script>
-</body>
-</html>
