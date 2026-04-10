@@ -12,81 +12,93 @@
             display: flex; flex-direction: column; gap: 10px; z-index: 1000;
         }
         .view-btn {
-            background: white; border: 2px solid #333; border-radius: 4px;
-            padding: 10px 15px; cursor: pointer; font-weight: bold; font-size: 11px;
+            background: white; border: 2px solid #333; padding: 10px;
+            cursor: pointer; font-weight: bold; font-size: 11px;
         }
-        /* Messaggio di stato */
-        #status-log {
-            position: absolute; bottom: 10px; left: 10px;
-            background: rgba(0,0,0,0.7); color: white;
-            padding: 5px; font-size: 10px; z-index: 2000;
+        /* Messaggio diagnostico a schermo */
+        #debug-console {
+            position: absolute; bottom: 20px; left: 20px; right: 20px;
+            background: rgba(0,0,0,0.8); color: #00ff00;
+            padding: 10px; font-family: monospace; font-size: 12px;
+            z-index: 2000; pointer-events: none;
         }
     </style>
 </head>
 <body>
 
-    <div id="status-log">Inizializzazione...</div>
+    <div id="debug-console">Inizializzazione sistema...</div>
 
     <div class="controls">
-        <button class="view-btn" onclick="rotateModel('top')">Vista Alto</button>
-        <button class="view-btn" onclick="rotateModel('front')">Vista Fronte</button>
-        <button class="view-btn" onclick="rotateModel('side')">Vista Lato</button>
+        <button class="view-btn" onclick="rotateModel('top')">VISTA ALTO</button>
+        <button class="view-btn" onclick="rotateModel('front')">VISTA FRONTE</button>
+        <button class="view-btn" onclick="rotateModel('side')">VISTA LATO</button>
     </div>
 
     <a-scene 
-        mindar-image="imageTargetSrc: targets.mind; uiScanning: #scanning-overlay; filterMinCF:0.0001; filterBeta:0.001;" 
+        mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes;" 
         color-space="sRGB" 
         renderer="colorManagement: true, physicallyCorrectLights" 
         vr-mode-ui="enabled: false" 
         device-orientation-permission-ui="enabled: false">
         
+        <a-assets>
+            <a-asset-item id="modelAsset" src=""></a-asset-item>
+        </a-assets>
+
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <a-entity id="target" mindar-image-target="targetIndex: 0">
-            <a-gltf-model id="model-entity" 
+        <a-entity id="targetContainer" mindar-image-target="targetIndex: 0">
+            <a-gltf-model id="cadModel" 
                 rotation="0 0 0" 
                 position="0 0.4 0" 
-                scale="0.3 0.3 0.3">
+                scale="0.2 0.2 0.2">
             </a-gltf-model>
         </a-entity>
     </a-scene>
 
     <script>
-        const log = document.getElementById('status-log');
+        const consoleLog = document.getElementById('debug-console');
         const GITHUB_BASE_URL = "https://raw.githubusercontent.com/daniloevil/ar-qr-app/main/models/";
+        
         const urlParams = new URLSearchParams(window.location.search);
         const modelName = urlParams.get('model');
-        const modelEntity = document.querySelector('#model-entity');
 
-        // 1. Caricamento Modello
+        // Check 1: Modello
         if (modelName) {
-            const fileUrl = GITHUB_BASE_URL + modelName + ".glb";
-            modelEntity.setAttribute('gltf-model', fileUrl);
-            log.innerText = "Modello caricato: " + modelName;
+            const fullUrl = GITHUB_BASE_URL + modelName + ".glb";
+            document.querySelector('#cadModel').setAttribute('gltf-model', fullUrl);
+            consoleLog.innerText += "\n> Caricamento modello: " + modelName;
         } else {
-            log.innerText = "Errore: Nessun modello nell'URL";
+            consoleLog.innerText += "\n> ERRORE: Manca ?model= nell'URL";
         }
 
-        // 2. Controllo Eventi AR
-        const targetEntity = document.querySelector('#target');
+        // Check 2: Eventi Target
+        const target = document.querySelector('#targetContainer');
         
-        targetEntity.addEventListener("targetFound", () => {
-            log.innerText = "Target TROVATO! 🎯";
-            log.style.background = "green";
+        target.addEventListener("targetFound", () => {
+            consoleLog.style.color = "#00ff00";
+            consoleLog.innerText = "TARGET TROVATO - Modello visualizzato";
         });
 
-        targetEntity.addEventListener("targetLost", () => {
-            log.innerText = "Target Perso. Inquadra il logo.";
-            log.style.background = "orange";
+        target.addEventListener("targetLost", () => {
+            consoleLog.innerText = "Inquadra il logo per vedere il pezzo...";
         });
 
-        // 3. Rotazione
+        // Gestione errori di caricamento MindAR
+        window.addEventListener("mindar-image-ready", () => {
+            consoleLog.innerText += "\n> MindAR pronto. Inquadra il marker.";
+        });
+
+        window.addEventListener("mindar-image-error", (e) => {
+            consoleLog.style.color = "red";
+            consoleLog.innerText += "\n> ERRORE MINDAR: File .mind non trovato o corrotto.";
+        });
+
         function rotateModel(view) {
-            switch(view) {
-                case 'top': modelEntity.setAttribute('rotation', '90 0 0'); break;
-                case 'front': modelEntity.setAttribute('rotation', '0 0 0'); break;
-                case 'side': modelEntity.setAttribute('rotation', '0 90 0'); break;
-            }
+            const m = document.querySelector('#cadModel');
+            if(view === 'top') m.setAttribute('rotation', '90 0 0');
+            if(view === 'front') m.setAttribute('rotation', '0 0 0');
+            if(view === 'side') m.setAttribute('rotation', '0 90 0');
         }
     </script>
 </body>
