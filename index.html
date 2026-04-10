@@ -1,102 +1,97 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    <title>Visualizzatore CAD - Danilo</title>
+    
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; }
+        body { margin: 0; font-family: sans-serif; background: #ffffff; overflow: hidden; }
         
-        /* Estetica dei tasti (come richiesto) */
+        model-viewer { 
+            width: 100vw; 
+            height: 100vh; 
+            background-color: #f8f8f8; /* Grigio chiarissimo tecnico */
+        }
+
         .controls {
             position: absolute; top: 20px; left: 20px;
-            display: flex; flex-direction: column; gap: 10px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 10px; z-index: 100;
         }
+
         .view-btn {
             background: white; border: 2px solid #333; border-radius: 4px;
             padding: 10px 15px; cursor: pointer; font-weight: bold; font-size: 11px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        /* Console di stato per il debug */
         #status-log {
-            position: absolute; bottom: 20px; left: 20px; right: 20px;
-            background: rgba(0,0,0,0.7); color: #00ff00;
-            padding: 10px; font-family: monospace; font-size: 12px;
-            z-index: 2000; pointer-events: none; border-radius: 5px;
+            position: absolute; bottom: 10px; left: 10px;
+            font-size: 10px; color: #666; font-family: monospace;
         }
     </style>
 </head>
 <body>
 
-    <div id="status-log">Inizializzazione sistema AR...</div>
-
     <div class="controls">
-        <button class="view-btn" onclick="rotateModel('top')">Vista Alto (Top)</button>
-        <button class="view-btn" onclick="rotateModel('front')">Vista Fronte (Front)</button>
-        <button class="view-btn" onclick="rotateModel('side')">Vista Lato (Side)</button>
+        <button class="view-btn" onclick="setView('top')">Vista Alto (Top)</button>
+        <button class="view-btn" onclick="setView('front')">Vista Fronte (Front)</button>
+        <button class="view-btn" onclick="setView('side')">Vista Lato (Side)</button>
     </div>
 
-    <a-scene 
-        mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: yes; uiScanning: yes; filterMinCF:0.0001; filterBeta:0.001;" 
-        color-space="sRGB" 
-        renderer="colorManagement: true, physicallyCorrectLights" 
-        vr-mode-ui="enabled: false" 
-        device-orientation-permission-ui="enabled: false">
-        
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <div id="status-log">Caricamento...</div>
 
-        <a-entity id="targetContainer" mindar-image-target="targetIndex: 0">
-    <a-box position="0 0 0" scale="0.1 0.1 0.1" color="red" opacity="0.5"></a-box>
-
-    <a-gltf-model id="cadModel" 
-        rotation="0 0 0" 
-        position="0 0.2 0" 
-        scale="1 1 1"
-        visible="true">
-    </a-gltf-model>
-</a-entity>
-    </a-scene>
+    <model-viewer id="viewer" 
+        camera-controls 
+        touch-action="pan-y" 
+        bounds="tight" 
+        min-camera-orbit="auto 0deg auto"
+        interaction-prompt="none"
+        shadow-intensity="0" 
+        exposure="1"
+        environment-image="neutral"
+        alt="Modello CAD">
+    </model-viewer>
 
     <script>
-        const status = document.getElementById('status-log');
         const GITHUB_BASE_URL = "https://raw.githubusercontent.com/daniloevil/ar-qr-app/main/models/";
-        
         const urlParams = new URLSearchParams(window.location.search);
         const modelName = urlParams.get('model');
-        const modelEntity = document.querySelector('#cadModel');
+        const viewer = document.getElementById('viewer');
+        const log = document.getElementById('status-log');
 
-        // Caricamento dinamico del pezzo 3D da GitHub
         if (modelName) {
-            const fullUrl = GITHUB_BASE_URL + modelName + ".glb";
-            modelEntity.setAttribute('gltf-model', fullUrl);
-            status.innerText = "Modello: " + modelName + " caricato. Inquadra il logo.";
-        } else {
-            status.style.color = "red";
-            status.innerText = "ERRORE: Manca il nome del modello nell'URL (?model=...)";
+            const fileUrl = GITHUB_BASE_URL + modelName + ".glb";
+            viewer.src = fileUrl;
+            log.innerText = "Modello caricato: " + modelName;
         }
 
-        // Eventi di tracciamento
-        const target = document.querySelector('#targetContainer');
-        
-        target.addEventListener("targetFound", () => {
-            status.style.display = "none"; // Nascondi log quando vedi il pezzo
-        });
-
-        target.addEventListener("targetLost", () => {
-            status.style.display = "block";
-            status.innerText = "Target perso. Inquadra di nuovo il logo.";
-        });
-
-        // Funzione per ruotare il pezzo rispetto all'osservatore
-        function rotateModel(view) {
+        // Gestione Viste Standard
+        function setView(view) {
             switch(view) {
-                case 'top': modelEntity.setAttribute('rotation', '90 0 0'); break;
-                case 'front': modelEntity.setAttribute('rotation', '0 0 0'); break;
-                case 'side': modelEntity.setAttribute('rotation', '0 90 0'); break;
+                case 'top': 
+                    // Inquadra esattamente da sopra
+                    viewer.cameraOrbit = "0deg 0deg 100%"; 
+                    break;
+                case 'front': 
+                    viewer.cameraOrbit = "0deg 90deg 100%"; 
+                    break;
+                case 'side': 
+                    viewer.cameraOrbit = "90deg 90deg 100%"; 
+                    break;
             }
+            viewer.jumpCameraToGoal();
         }
+
+        // Questo script aiuta a ricentrare la camera se il pezzo è "scappato"
+        viewer.addEventListener('load', () => {
+            log.innerText = "Pronto.";
+            // Forza il ricalcolo dei limiti per centrare il pezzo
+            const center = viewer.getCameraTarget();
+            log.innerText += " - Pezzo centrato.";
+        });
     </script>
 </body>
 </html>
