@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizzatore CAD - Danilo</title>
+    <title>Visualizzatore CAD - Danilo (Black Edition)</title>
     
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
 
     <style>
-        body { margin: 0; font-family: sans-serif; background: #ffffff; overflow: hidden; }
+        /* SFONDO NERO TOTALE */
+        body { margin: 0; font-family: sans-serif; background: #000000; overflow: hidden; }
         
         model-viewer { 
             width: 100vw; 
             height: 100vh; 
-            background-color: #f8f8f8; /* Grigio chiarissimo tecnico */
+            background-color: #000000; 
         }
 
         .controls {
@@ -21,15 +22,22 @@
             display: flex; flex-direction: column; gap: 10px; z-index: 100;
         }
 
+        /* TASTI BIANCHI PER CONTRASTO */
         .view-btn {
-            background: white; border: 2px solid #333; border-radius: 4px;
-            padding: 10px 15px; cursor: pointer; font-weight: bold; font-size: 11px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.9); 
+            border: 1px solid #ffffff; 
+            border-radius: 4px;
+            padding: 10px 15px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 11px;
+            color: #000;
+            box-shadow: 0 4px 15px rgba(255,255,255,0.1);
         }
 
         #status-log {
             position: absolute; bottom: 10px; left: 10px;
-            font-size: 10px; color: #666; font-family: monospace;
+            font-size: 10px; color: #555; font-family: monospace;
         }
     </style>
 </head>
@@ -50,7 +58,7 @@
         min-camera-orbit="auto 0deg auto"
         interaction-prompt="none"
         shadow-intensity="0" 
-        exposure="1"
+        exposure="1.2" 
         environment-image="neutral"
         alt="Modello CAD">
     </model-viewer>
@@ -65,32 +73,20 @@
         if (modelName) {
             const fileUrl = GITHUB_BASE_URL + modelName + ".glb";
             viewer.src = fileUrl;
-            log.innerText = "Modello caricato: " + modelName;
+            log.innerText = "Modello: " + modelName;
         }
 
-        // Gestione Viste Standard
         function setView(view) {
             switch(view) {
-                case 'top': 
-                    // Inquadra esattamente da sopra
-                    viewer.cameraOrbit = "0deg 0deg 100%"; 
-                    break;
-                case 'front': 
-                    viewer.cameraOrbit = "0deg 90deg 100%"; 
-                    break;
-                case 'side': 
-                    viewer.cameraOrbit = "90deg 90deg 100%"; 
-                    break;
+                case 'top': viewer.cameraOrbit = "0deg 0deg 100%"; break;
+                case 'front': viewer.cameraOrbit = "0deg 90deg 100%"; break;
+                case 'side': viewer.cameraOrbit = "90deg 90deg 100%"; break;
             }
             viewer.jumpCameraToGoal();
         }
 
-        // Questo script aiuta a ricentrare la camera se il pezzo è "scappato"
         viewer.addEventListener('load', () => {
             log.innerText = "Pronto.";
-            // Forza il ricalcolo dei limiti per centrare il pezzo
-            const center = viewer.getCameraTarget();
-            log.innerText += " - Pezzo centrato.";
         });
     </script>
 </body>
