@@ -8,16 +8,14 @@
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
 
     <style>
-        body { margin: 0; font-family: sans-serif; background: #f4f4f4; overflow: hidden; }
+        body { margin: 0; font-family: sans-serif; background: #ffffff; overflow: hidden; }
         
-        /* Contenitore per il visualizzatore */
         model-viewer { 
             width: 100vw; 
             height: 100vh; 
             background-color: #ffffff; 
         }
 
-        /* NUOVO: Stile per i tasti delle Viste Standard */
         .controls {
             position: absolute;
             top: 20px;
@@ -29,28 +27,22 @@
         }
 
         .view-btn {
-            background: rgba(255, 255, 255, 0.9);
+            background: white;
             border: 2px solid #333;
             border-radius: 4px;
             padding: 10px 15px;
             cursor: pointer;
             font-weight: bold;
-            text-transform: uppercase;
             font-size: 11px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transition: background 0.2s;
-        }
-
-        .view-btn:active {
-            background: #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         .error-msg { 
             position: absolute; 
-            top: 50%; 
-            left: 50%; 
+            top: 50%; left: 50%; 
             transform: translate(-50%, -50%); 
             text-align: center; 
+            color: red;
             display: none; 
         }
     </style>
@@ -64,7 +56,7 @@
     </div>
 
     <div id="error" class="error-msg">
-        <p>⚠️ Modello non specificato o non trovato.</p>
+        <p>⚠️ Modello non trovato. Controlla il nome nell'URL.</p>
     </div>
 
     <model-viewer id="viewer" 
@@ -79,13 +71,44 @@
         environment-image="neutral"
         alt="Modello CAD">
         
-        <button slot="ar-button" style="background-color: white; border-radius: 8px; border: 1px solid #333; position: absolute; bottom: 16px; right: 16px; padding: 12px; font-weight: bold;">
-            👋 Visualizza nel tuo spazio
+        <button slot="ar-button" style="background-color: white; border: 1px solid #333; border-radius: 8px; position: absolute; bottom: 20px; right: 20px; padding: 12px; font-weight: bold;">
+            👋 Visualizza in AR
         </button>
     </model-viewer>
 
     <script>
+        // CONFIGURAZIONE DEFINITIVA
         const GITHUB_BASE_URL = "https://raw.githubusercontent.com/daniloevil/ar-qr-app/main/models/";
 
         const urlParams = new URLSearchParams(window.location.search);
         const modelName = urlParams.get('model');
+        const viewer = document.getElementById('viewer');
+        const errorDiv = document.getElementById('error');
+
+        if (modelName) {
+            // Costruiamo l'indirizzo del file
+            const fileUrl = GITHUB_BASE_URL + modelName + ".glb";
+            
+            // Applichiamo l'indirizzo al visualizzatore
+            viewer.src = fileUrl;
+            viewer.iosSrc = fileUrl;
+
+            // Debug per te: se non vedi il modello, controlla la console (F12)
+            console.log("Tentativo di caricamento modello da:", fileUrl);
+        } else {
+            viewer.style.display = 'none';
+            errorDiv.style.display = 'block';
+            errorDiv.innerHTML = "<p>Nessun modello specificato.<br>Esempio: ?model=nome_file</p>";
+        }
+
+        function setView(view) {
+            switch(view) {
+                case 'top': viewer.cameraOrbit = "0deg 0deg 100%"; break;
+                case 'front': viewer.cameraOrbit = "0deg 90deg 100%"; break;
+                case 'side': viewer.cameraOrbit = "90deg 90deg 100%"; break;
+            }
+            viewer.jumpCameraToGoal();
+        }
+    </script>
+</body>
+</html>
